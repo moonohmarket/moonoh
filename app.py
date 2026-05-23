@@ -57,10 +57,10 @@ def get_mta():
                 header = alert.get("header_text", {}).get("translation", [{}])[0].get("text", "")
                 for ie in alert.get("informed_entity", []):
                     route = ie.get("route_id", "")
-                    if route and route not in seen and len(alerts) < 3:
+                    if route and route not in seen and len(alerts) < 2:
                         if any(w in header.lower() for w in ["delay", "suspend", "skip", "reroute", "service change"]):
                             seen.add(route)
-                            alerts.append(f"{route}  {header.split('.')[0][:40]}")
+                            alerts.append(f"{route}  {header.split('.')[0][:35]}")
             if not alerts:
                 return {"good": True, "lines": []}
             return {"good": False, "lines": alerts}
@@ -77,61 +77,70 @@ def create_image(weather, mta):
     REG  = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
     try:
-        f_logo  = ImageFont.truetype(BOLD, 96)
-        f_date  = ImageFont.truetype(REG, 52)
-        f_label = ImageFont.truetype(REG, 44)
-        f_temp  = ImageFont.truetype(BOLD, 200)
-        f_desc  = ImageFont.truetype(REG, 68)
-        f_sub   = ImageFont.truetype(REG, 54)
-        f_mta   = ImageFont.truetype(REG, 64)
-        f_tag   = ImageFont.truetype(BOLD, 64)
-        f_url   = ImageFont.truetype(BOLD, 64)
+        f_logo  = ImageFont.truetype(BOLD, 80)
+        f_date  = ImageFont.truetype(REG,  44)
+        f_label = ImageFont.truetype(BOLD, 36)
+        f_temp  = ImageFont.truetype(BOLD, 180)
+        f_desc  = ImageFont.truetype(REG,  60)
+        f_sub   = ImageFont.truetype(REG,  48)
+        f_mta   = ImageFont.truetype(REG,  56)
+        f_tag   = ImageFont.truetype(BOLD, 52)
+        f_url   = ImageFont.truetype(BOLD, 52)
     except:
         f_logo = f_date = f_label = f_temp = f_desc = f_sub = f_mta = f_tag = f_url = ImageFont.load_default()
 
     BLACK  = "#111111"
-    GRAY   = "#999999"
-    LGRAY  = "#EBEBEB"
+    GRAY   = "#888888"
+    LGRAY  = "#E5E5E5"
     ACCENT = "#3A46E2"
     GREEN  = "#22C55E"
     RED    = "#EF4444"
     YELLOW = "#F59E0B"
-    PAD    = 72
+    PAD    = 64
 
-    # Header
-    draw.text((PAD, 110), "moonoh", fill=ACCENT, font=f_logo, anchor="lm")
+    # ── HEADER (y: 0–130) ──
+    y = 80
+    draw.text((PAD, y), "moonoh", fill=ACCENT, font=f_logo, anchor="lm")
     today = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5))).strftime("%b %d, %Y")
-    draw.text((W - PAD, 110), today, fill=GRAY, font=f_date, anchor="rm")
-    draw.line([(PAD, 160), (W - PAD, 160)], fill=LGRAY, width=2)
+    draw.text((W - PAD, y), today, fill=GRAY, font=f_date, anchor="rm")
+    draw.line([(PAD, 120), (W - PAD, 120)], fill=LGRAY, width=2)
 
-    # Weather
-    draw.text((PAD, 210), "NYC WEATHER", fill=GRAY, font=f_label)
-    draw.text((PAD, 230), f"{weather['temp']}°F", fill=BLACK, font=f_temp)
-    draw.text((PAD + 20, 460), f"{weather['emoji']}  {weather['desc']}", fill=BLACK, font=f_desc)
-    draw.text((PAD + 20, 540), f"Feels {weather['feels_like']}°F  ·  Humidity {weather['humidity']}%", fill=GRAY, font=f_sub)
-    draw.line([(PAD, 620), (W - PAD, 620)], fill=LGRAY, width=2)
+    # ── WEATHER SECTION (y: 140–560) ──
+    draw.text((PAD, 150), "NYC WEATHER", fill=GRAY, font=f_label)
 
-    # MTA
-    draw.text((PAD, 660), "MTA SUBWAY", fill=GRAY, font=f_label)
+    # Big temp
+    draw.text((PAD, 175), f"{weather['temp']}°F", fill=BLACK, font=f_temp)
+
+    # Weather desc below temp
+    draw.text((PAD, 385), f"{weather['emoji']}  {weather['desc']}", fill=BLACK, font=f_desc)
+    draw.text((PAD, 460), f"Feels like {weather['feels_like']}°F  ·  Humidity {weather['humidity']}%", fill=GRAY, font=f_sub)
+
+    draw.line([(PAD, 540), (W - PAD, 540)], fill=LGRAY, width=2)
+
+    # ── MTA SECTION (y: 560–800) ──
+    draw.text((PAD, 560), "MTA SUBWAY", fill=GRAY, font=f_label)
 
     if mta["good"]:
-        draw.ellipse([PAD, 720, PAD + 28, 748], fill=GREEN)
-        draw.text((PAD + 48, 734), "All lines running normally", fill=BLACK, font=f_mta, anchor="lm")
-        draw.text((PAD + 48, 800), "Check mta.info for details", fill=GRAY, font=f_sub, anchor="lm")
+        dot_y = 625
+        draw.ellipse([PAD, dot_y, PAD + 32, dot_y + 32], fill=GREEN)
+        draw.text((PAD + 50, dot_y + 16), "All lines running normally", fill=BLACK, font=f_mta, anchor="lm")
+        draw.text((PAD + 50, dot_y + 84), "mta.info for full schedule", fill=GRAY, font=f_sub, anchor="lm")
     else:
-        y = 720
+        y = 625
         for i, line in enumerate(mta["lines"][:2]):
             col = RED if i == 0 else YELLOW
-            draw.ellipse([PAD, y, PAD + 28, y + 28], fill=col)
-            draw.text((PAD + 48, y + 14), line[:45], fill=BLACK, font=f_sub, anchor="lm")
-            y += 74
-        draw.text((PAD + 48, y + 8), "Check mta.info for details", fill=GRAY, font=f_sub, anchor="lm")
+            draw.ellipse([PAD, y, PAD + 32, y + 32], fill=col)
+            draw.text((PAD + 50, y + 16), line[:40], fill=BLACK, font=f_sub, anchor="lm")
+            y += 90
+        draw.text((PAD + 50, y + 8), "mta.info for details", fill=GRAY, font=f_sub, anchor="lm")
 
-    draw.line([(PAD, 880), (W - PAD, 880)], fill=LGRAY, width=2)
+    draw.line([(PAD, 800), (W - PAD, 800)], fill=LGRAY, width=2)
 
-    draw.text((PAD, 940), "Buy & Sell with Neighbors on moonoh", fill=BLACK, font=f_tag)
-    draw.text((PAD, 1010), "moon-oh.com", fill=ACCENT, font=f_url)
-    bb = draw.textbbox((PAD, 1010), "moon-oh.com", font=f_url)
+    # ── FOOTER (y: 820–1060) ──
+    draw.text((PAD, 850), "Buy & Sell with Your NYC", fill=BLACK, font=f_tag)
+    draw.text((PAD, 918), "Neighbors on moonoh 🗽", fill=BLACK, font=f_tag)
+    draw.text((PAD, 990), "moon-oh.com", fill=ACCENT, font=f_url)
+    bb = draw.textbbox((PAD, 990), "moon-oh.com", font=f_url)
     draw.line([(bb[0], bb[3] + 4), (bb[2], bb[3] + 4)], fill=ACCENT, width=3)
 
     return img
@@ -157,57 +166,6 @@ No fees. List in seconds. Meet your neighbors.
 
 #NYC #NewYork #NYCLife #NYCWeather #MTA #moonoh #NYCMarketplace #GoodMorningNYC"""
 
-def post_to_threads(image_url, caption, access_token):
-    try:
-        # Get user ID
-        me = requests.get(f"https://graph.threads.net/v1.0/me?access_token={access_token}").json()
-        user_id = me.get("id")
-        if not user_id:
-            return {"error": "No user ID", "detail": me}
-
-        # Create container
-        r1 = requests.post(f"https://graph.threads.net/v1.0/{user_id}/threads", data={
-            "media_type": "IMAGE",
-            "image_url": image_url,
-            "text": caption,
-            "access_token": access_token
-        })
-        container_id = r1.json().get("id")
-        if not container_id:
-            return {"error": "No container", "detail": r1.json()}
-
-        import time; time.sleep(3)
-
-        # Publish
-        r2 = requests.post(f"https://graph.threads.net/v1.0/{user_id}/threads_publish", data={
-            "creation_id": container_id,
-            "access_token": access_token
-        })
-        return {"success": True, "post_id": r2.json().get("id"), "detail": r2.json()}
-    except Exception as e:
-        return {"error": str(e)}
-
-def post_to_instagram(image_url, caption, page_id, access_token):
-    try:
-        # Create container
-        r1 = requests.post(f"https://graph.facebook.com/v21.0/{page_id}/media", data={
-            "image_url": image_url,
-            "caption": caption,
-            "access_token": access_token
-        })
-        container_id = r1.json().get("id")
-        if not container_id:
-            return {"error": "No container", "detail": r1.json()}
-
-        # Publish
-        r2 = requests.post(f"https://graph.facebook.com/v21.0/{page_id}/media_publish", data={
-            "creation_id": container_id,
-            "access_token": access_token
-        })
-        return {"success": True, "post_id": r2.json().get("id"), "detail": r2.json()}
-    except Exception as e:
-        return {"error": str(e)}
-
 @app.route("/generate")
 def generate():
     weather = get_weather()
@@ -219,15 +177,14 @@ def generate():
     img.save(buf, format="JPEG", quality=95)
     buf.seek(0)
 
-    today_str = datetime.datetime.now().strftime("%Y-%m-%d-%H%M")
-    result = cloudinary.uploader.upload(buf, public_id=f"moonoh_daily_{today_str}", overwrite=True, resource_type="image")
+    ts = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    result = cloudinary.uploader.upload(buf, public_id=f"moonoh_daily_{ts}", overwrite=True, resource_type="image")
     image_url = result["secure_url"]
 
     return jsonify({"image_url": image_url, "caption": caption, "weather": weather, "mta": mta})
 
 @app.route("/post")
 def post_all():
-    """Generate image and post to both Instagram and Threads"""
     weather = get_weather()
     mta = get_mta()
     img = create_image(weather, mta)
@@ -237,62 +194,51 @@ def post_all():
     img.save(buf, format="JPEG", quality=95)
     buf.seek(0)
 
-    today_str = datetime.datetime.now().strftime("%Y-%m-%d")
-    result = cloudinary.uploader.upload(buf, public_id=f"moonoh_daily_{today_str}", overwrite=True, resource_type="image")
+    ts = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    result = cloudinary.uploader.upload(buf, public_id=f"moonoh_daily_{ts}", overwrite=True, resource_type="image")
     image_url = result["secure_url"]
 
     results = {"image_url": image_url, "caption": caption[:100]}
 
-    # Post to Instagram
     ig_token = INSTAGRAM_ACCESS_TOKEN
     if ig_token:
-        ig_result = post_to_instagram(image_url, caption, INSTAGRAM_PAGE_ID, ig_token)
-        results["instagram"] = ig_result
+        try:
+            r1 = requests.post(f"https://graph.facebook.com/v21.0/{INSTAGRAM_PAGE_ID}/media", data={
+                "image_url": image_url, "caption": caption, "access_token": ig_token
+            })
+            cid = r1.json().get("id")
+            if cid:
+                r2 = requests.post(f"https://graph.facebook.com/v21.0/{INSTAGRAM_PAGE_ID}/media_publish", data={
+                    "creation_id": cid, "access_token": ig_token
+                })
+                results["instagram"] = {"success": True, "post_id": r2.json().get("id")}
+            else:
+                results["instagram"] = {"error": r1.json()}
+        except Exception as e:
+            results["instagram"] = {"error": str(e)}
     else:
         results["instagram"] = {"skipped": "No Instagram token"}
-
-    # Post to Threads
-    th_token = THREADS_ACCESS_TOKEN
-    if th_token:
-        th_result = post_to_threads(image_url, caption, th_token)
-        results["threads"] = th_result
-    else:
-        results["threads"] = {"skipped": "No Threads token"}
 
     return jsonify(results)
 
 @app.route("/threads/callback")
 def threads_callback():
     code = request.args.get("code")
-    error = request.args.get("error")
-    if error:
-        return jsonify({"error": error})
     if code:
-        # Auto-exchange for token
         r = requests.post("https://graph.threads.net/oauth/access_token", data={
-            "client_id": THREADS_APP_ID,
-            "client_secret": THREADS_APP_SECRET,
-            "code": code,
-            "redirect_uri": "https://web-production-87d57.up.railway.app/threads/callback",
+            "client_id": THREADS_APP_ID, "client_secret": THREADS_APP_SECRET,
+            "code": code, "redirect_uri": "https://web-production-87d57.up.railway.app/threads/callback",
             "grant_type": "authorization_code"
         })
         token_data = r.json()
         short_token = token_data.get("access_token", "")
-
         if short_token:
-            # Exchange for long-lived token
-            r2 = requests.get(f"https://graph.threads.net/access_token", params={
-                "grant_type": "th_exchange_token",
-                "client_secret": THREADS_APP_SECRET,
+            r2 = requests.get("https://graph.threads.net/access_token", params={
+                "grant_type": "th_exchange_token", "client_secret": THREADS_APP_SECRET,
                 "access_token": short_token
             })
-            long_data = r2.json()
-            long_token = long_data.get("access_token", short_token)
-            return jsonify({
-                "success": True,
-                "THREADS_ACCESS_TOKEN": long_token,
-                "message": "Copy THREADS_ACCESS_TOKEN to Railway Variables!"
-            })
+            long_token = r2.json().get("access_token", short_token)
+            return jsonify({"success": True, "THREADS_ACCESS_TOKEN": long_token})
         return jsonify({"code": code, "token_response": token_data})
     return jsonify({"message": "No code received"})
 
