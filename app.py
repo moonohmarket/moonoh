@@ -73,8 +73,10 @@ def create_image(weather, mta):
     img = Image.new("RGB", (W, H), "#FFFFFF")
     draw = ImageDraw.Draw(img)
 
-    BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-    REG  = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    import os as _os
+    _base = _os.path.dirname(_os.path.abspath(__file__))
+    BOLD = _os.path.join(_base, "fonts", "DejaVuSans-Bold.ttf")
+    REG  = _os.path.join(_base, "fonts", "DejaVuSans.ttf")
 
     try:
         f_logo  = ImageFont.truetype(BOLD, 80)
