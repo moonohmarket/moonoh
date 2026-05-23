@@ -77,15 +77,15 @@ def create_image(weather, mta):
     REG  = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
     try:
-        f_logo  = ImageFont.truetype(BOLD, 52)
-        f_date  = ImageFont.truetype(REG, 26)
-        f_label = ImageFont.truetype(REG, 20)
-        f_temp  = ImageFont.truetype(BOLD, 120)
-        f_desc  = ImageFont.truetype(REG, 36)
-        f_sub   = ImageFont.truetype(REG, 28)
-        f_mta   = ImageFont.truetype(REG, 34)
-        f_tag   = ImageFont.truetype(BOLD, 38)
-        f_url   = ImageFont.truetype(BOLD, 36)
+        f_logo  = ImageFont.truetype(BOLD, 96)
+        f_date  = ImageFont.truetype(REG, 52)
+        f_label = ImageFont.truetype(REG, 44)
+        f_temp  = ImageFont.truetype(BOLD, 200)
+        f_desc  = ImageFont.truetype(REG, 68)
+        f_sub   = ImageFont.truetype(REG, 54)
+        f_mta   = ImageFont.truetype(REG, 64)
+        f_tag   = ImageFont.truetype(BOLD, 64)
+        f_url   = ImageFont.truetype(BOLD, 64)
     except:
         f_logo = f_date = f_label = f_temp = f_desc = f_sub = f_mta = f_tag = f_url = ImageFont.load_default()
 
@@ -98,38 +98,41 @@ def create_image(weather, mta):
     YELLOW = "#F59E0B"
     PAD    = 72
 
-    draw.text((PAD, 90), "moonoh", fill=ACCENT, font=f_logo, anchor="lm")
+    # Header
+    draw.text((PAD, 110), "moonoh", fill=ACCENT, font=f_logo, anchor="lm")
     today = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5))).strftime("%b %d, %Y")
-    draw.text((W - PAD, 90), today, fill=GRAY, font=f_date, anchor="rm")
-    draw.line([(PAD, 130), (W - PAD, 130)], fill=LGRAY, width=1)
+    draw.text((W - PAD, 110), today, fill=GRAY, font=f_date, anchor="rm")
+    draw.line([(PAD, 160), (W - PAD, 160)], fill=LGRAY, width=2)
 
-    draw.text((PAD, 162), "NYC WEATHER", fill=GRAY, font=f_label)
-    draw.text((PAD, 175), f"{weather['temp']}°F", fill=BLACK, font=f_temp)
-    draw.text((PAD + 390, 225), f"{weather['emoji']}  {weather['desc']}", fill=BLACK, font=f_desc, anchor="lm")
-    draw.text((PAD + 390, 275), f"Feels like {weather['feels_like']}°F  ·  Humidity {weather['humidity']}%", fill=GRAY, font=f_sub, anchor="lm")
-    draw.line([(PAD, 370), (W - PAD, 370)], fill=LGRAY, width=1)
+    # Weather
+    draw.text((PAD, 210), "NYC WEATHER", fill=GRAY, font=f_label)
+    draw.text((PAD, 230), f"{weather['temp']}°F", fill=BLACK, font=f_temp)
+    draw.text((PAD + 20, 460), f"{weather['emoji']}  {weather['desc']}", fill=BLACK, font=f_desc)
+    draw.text((PAD + 20, 540), f"Feels {weather['feels_like']}°F  ·  Humidity {weather['humidity']}%", fill=GRAY, font=f_sub)
+    draw.line([(PAD, 620), (W - PAD, 620)], fill=LGRAY, width=2)
 
-    draw.text((PAD, 395), "MTA SUBWAY", fill=GRAY, font=f_label)
+    # MTA
+    draw.text((PAD, 660), "MTA SUBWAY", fill=GRAY, font=f_label)
 
     if mta["good"]:
-        draw.ellipse([PAD, 428, PAD + 18, 446], fill=GREEN)
-        draw.text((PAD + 30, 437), "All lines running normally", fill=BLACK, font=f_mta, anchor="lm")
-        draw.text((PAD + 30, 482), "Check mta.info for details", fill=GRAY, font=f_sub, anchor="lm")
+        draw.ellipse([PAD, 720, PAD + 28, 748], fill=GREEN)
+        draw.text((PAD + 48, 734), "All lines running normally", fill=BLACK, font=f_mta, anchor="lm")
+        draw.text((PAD + 48, 800), "Check mta.info for details", fill=GRAY, font=f_sub, anchor="lm")
     else:
-        y = 428
-        for i, line in enumerate(mta["lines"][:3]):
+        y = 720
+        for i, line in enumerate(mta["lines"][:2]):
             col = RED if i == 0 else YELLOW
-            draw.ellipse([PAD, y, PAD + 18, y + 18], fill=col)
-            draw.text((PAD + 30, y + 9), line[:52], fill=BLACK, font=f_sub, anchor="lm")
-            y += 46
-        draw.text((PAD + 30, y + 8), "Check mta.info for details", fill=GRAY, font=f_sub, anchor="lm")
+            draw.ellipse([PAD, y, PAD + 28, y + 28], fill=col)
+            draw.text((PAD + 48, y + 14), line[:45], fill=BLACK, font=f_sub, anchor="lm")
+            y += 74
+        draw.text((PAD + 48, y + 8), "Check mta.info for details", fill=GRAY, font=f_sub, anchor="lm")
 
-    draw.line([(PAD, 555), (W - PAD, 555)], fill=LGRAY, width=1)
+    draw.line([(PAD, 880), (W - PAD, 880)], fill=LGRAY, width=2)
 
-    draw.text((PAD, 600), "Buy & Sell with Your NYC Neighbors on moonoh", fill=BLACK, font=f_tag)
-    draw.text((PAD, 665), "moon-oh.com", fill=ACCENT, font=f_url)
-    bb = draw.textbbox((PAD, 665), "moon-oh.com", font=f_url)
-    draw.line([(bb[0], bb[3] + 3), (bb[2], bb[3] + 3)], fill=ACCENT, width=2)
+    draw.text((PAD, 940), "Buy & Sell with Neighbors on moonoh", fill=BLACK, font=f_tag)
+    draw.text((PAD, 1010), "moon-oh.com", fill=ACCENT, font=f_url)
+    bb = draw.textbbox((PAD, 1010), "moon-oh.com", font=f_url)
+    draw.line([(bb[0], bb[3] + 4), (bb[2], bb[3] + 4)], fill=ACCENT, width=3)
 
     return img
 
