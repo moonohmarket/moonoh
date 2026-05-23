@@ -219,7 +219,7 @@ def generate():
     img.save(buf, format="JPEG", quality=95)
     buf.seek(0)
 
-    today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+    today_str = datetime.datetime.now().strftime("%Y-%m-%d-%H%M")
     result = cloudinary.uploader.upload(buf, public_id=f"moonoh_daily_{today_str}", overwrite=True, resource_type="image")
     image_url = result["secure_url"]
 
