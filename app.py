@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import requests
 from PIL import Image, ImageDraw, ImageFont
 import cloudinary
@@ -176,3 +176,13 @@ def health():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
+@app.route("/threads/callback")
+def threads_callback():
+    code = request.args.get("code")
+    error = request.args.get("error")
+    if error:
+        return jsonify({"error": error})
+    if code:
+        return jsonify({"code": code, "message": "Copy this code!"})
+    return jsonify({"message": "No code received"})
