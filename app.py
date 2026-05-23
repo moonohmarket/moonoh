@@ -19,239 +19,160 @@ def get_weather():
     try:
         r = requests.get("https://wttr.in/New+York?format=j1", timeout=8)
         data = r.json()
-        current = data["current_condition"][0]
-        temp_f = current["temp_F"]
-        desc = current["weatherDesc"][0]["value"]
-        feels_f = current["FeelsLikeF"]
-        humidity = current["humidity"]
-        
-        # Weather emoji
-        code = int(current.get("weatherCode", 113))
+        c = data["current_condition"][0]
+        code = int(c.get("weatherCode", 113))
         if code == 113: emoji = "☀️"
         elif code in [116, 119]: emoji = "⛅"
         elif code in [122, 143]: emoji = "☁️"
-        elif code in [176, 179, 182, 185, 263, 266, 281, 284, 293, 296, 299, 302, 305, 308, 311, 314, 317, 320, 323, 326, 329, 332, 335, 338, 350, 353, 356, 359, 362, 365, 368, 371, 374, 377]: emoji = "🌧️"
-        elif code in [200, 386, 389, 392, 395]: emoji = "⛈️"
-        else: emoji = "🌤️"
-        
+        elif code in [200, 386, 389]: emoji = "⛈️"
+        else: emoji = "🌧️"
         return {
             "emoji": emoji,
-            "temp": temp_f,
-            "feels_like": feels_f,
-            "desc": desc,
-            "humidity": humidity
+            "temp": c["temp_F"],
+            "feels_like": c["FeelsLikeF"],
+            "desc": c["weatherDesc"][0]["value"],
+            "humidity": c["humidity"]
         }
-    except Exception as e:
-        return {"emoji": "🌤️", "temp": "N/A", "feels_like": "N/A", "desc": "Check weather.gov", "humidity": "N/A"}
+    except:
+        return {"emoji": "🌤️", "temp": "—", "feels_like": "—", "desc": "See weather.gov", "humidity": "—"}
 
-def get_mta_status():
+def get_mta():
     try:
         r = requests.get(
             "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alert.json",
-            headers={"x-api-key": ""},
             timeout=8
         )
         if r.status_code == 200:
             data = r.json()
             alerts = []
-            entities = data.get("entity", [])
-            seen_lines = set()
-            for entity in entities[:20]:
+            seen = set()
+            for entity in data.get("entity", [])[:30]:
                 alert = entity.get("alert", {})
-                informed = alert.get("informed_entity", [])
                 header = alert.get("header_text", {}).get("translation", [{}])[0].get("text", "")
-                
-                for ie in informed:
+                for ie in alert.get("informed_entity", []):
                     route = ie.get("route_id", "")
-                    if route and route not in seen_lines and len(alerts) < 4:
-                        if any(word in header.lower() for word in ["delay", "suspend", "skip", "reroute", "service change"]):
-                            seen_lines.add(route)
-                            short = header.split(".")[0][:50] if header else "Service disruption"
-                            alerts.append(f"{route} train: {short}")
-            
+                    if route and route not in seen and len(alerts) < 3:
+                        if any(w in header.lower() for w in ["delay", "suspend", "skip", "reroute", "service change"]):
+                            seen.add(route)
+                            alerts.append(f"{route}  {header.split('.')[0][:40]}")
             if not alerts:
-                return {"status": "good", "alerts": [], "summary": "All lines running normally ✓"}
-            else:
-                return {"status": "delays", "alerts": alerts[:3], "summary": f"{len(alerts)} line(s) affected"}
-        else:
-            return {"status": "unknown", "alerts": [], "summary": "Check mta.info for updates"}
-    except Exception as e:
-        return {"status": "unknown", "alerts": [], "summary": "Check mta.info for updates"}
+                return {"good": True, "lines": []}
+            return {"good": False, "lines": alerts}
+    except:
+        pass
+    return {"good": True, "lines": []}
 
 def create_image(weather, mta):
     W, H = 1080, 1080
-    
-    # Background - dark navy with gradient feel
-    img = Image.new("RGB", (W, H), "#0A0E1A")
+    img = Image.new("RGB", (W, H), "#FFFFFF")
     draw = ImageDraw.Draw(img)
-    
-    # Subtle gradient overlay - lighter at top
-    for y in range(H):
-        alpha = int(20 * (1 - y / H))
-        r = min(255, 10 + alpha)
-        g = min(255, 14 + alpha)
-        b = min(255, 26 + alpha)
-        for x in range(W):
-            img.putpixel((x, y), (r, g, b))
-    
-    draw = ImageDraw.Draw(img)
-    
-    # Load fonts
+
+    BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+    REG  = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+
     try:
-        font_logo = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 52)
-        font_tagline = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
-        font_section = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 30)
-        font_weather_big = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 88)
-        font_weather_med = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 36)
-        font_weather_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 30)
-        font_mta = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32)
-        font_mta_alert = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
-        font_cta = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 34)
-        font_url = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 30)
-        font_date = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
+        f_logo  = ImageFont.truetype(BOLD, 52)
+        f_date  = ImageFont.truetype(REG, 26)
+        f_label = ImageFont.truetype(REG, 20)
+        f_temp  = ImageFont.truetype(BOLD, 120)
+        f_desc  = ImageFont.truetype(REG, 36)
+        f_sub   = ImageFont.truetype(REG, 28)
+        f_mta   = ImageFont.truetype(REG, 34)
+        f_tag   = ImageFont.truetype(BOLD, 38)
+        f_url   = ImageFont.truetype(BOLD, 36)
     except:
-        font_logo = font_tagline = font_section = font_weather_big = font_weather_med = font_weather_small = font_mta = font_mta_alert = font_cta = font_url = font_date = ImageFont.load_default()
+        f_logo = f_date = f_label = f_temp = f_desc = f_sub = f_mta = f_tag = f_url = ImageFont.load_default()
 
-    # Colors
-    PURPLE = "#7C3AED"
-    PURPLE_LIGHT = "#A78BFA"
-    WHITE = "#FFFFFF"
-    GRAY = "#9CA3AF"
-    GREEN = "#10B981"
-    RED = "#EF4444"
+    BLACK  = "#111111"
+    GRAY   = "#999999"
+    LGRAY  = "#EBEBEB"
+    ACCENT = "#3A46E2"
+    GREEN  = "#22C55E"
+    RED    = "#EF4444"
     YELLOW = "#F59E0B"
-    BG_CARD = "#111827"
+    PAD    = 72
 
-    # ─── TOP SECTION: moonoh branding ───
-    # Logo pill background
-    pill_x1, pill_y1, pill_x2, pill_y2 = 60, 55, 340, 115
-    draw.rounded_rectangle([pill_x1, pill_y1, pill_x2, pill_y2], radius=30, fill=PURPLE)
-    draw.text((200, 85), "moonoh", fill=WHITE, font=font_logo, anchor="mm")
-    
-    # Date top right
+    # ── HEADER ──────────────────────────────────────────
+    draw.text((PAD, 90), "moonoh", fill=ACCENT, font=f_logo, anchor="lm")
     today = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5))).strftime("%b %d, %Y")
-    draw.text((W - 60, 85), today, fill=GRAY, font=font_date, anchor="rm")
-    
-    # Tagline
-    draw.text((60, 135), "NYC's free neighborhood marketplace", fill=GRAY, font=font_tagline)
-    
-    # Divider line
-    draw.line([(60, 175), (W - 60, 175)], fill="#1F2937", width=2)
-    
-    # ─── WEATHER SECTION ───
-    # Section label
-    draw.text((60, 200), "NYC WEATHER TODAY", fill=PURPLE_LIGHT, font=font_section)
-    
-    # Big temperature
-    draw.text((60, 255), f"{weather['temp']}°F", fill=WHITE, font=font_weather_big)
-    
-    # Weather emoji and description
-    draw.text((380, 275), weather['emoji'], fill=WHITE, font=font_weather_big)
-    
-    # Description and feels like
-    draw.text((60, 370), f"{weather['desc']}", fill=GRAY, font=font_weather_med)
-    draw.text((60, 415), f"Feels like {weather['feels_like']}°F  ·  Humidity {weather['humidity']}%", fill=GRAY, font=font_weather_small)
+    draw.text((W - PAD, 90), today, fill=GRAY, font=f_date, anchor="rm")
+    draw.line([(PAD, 130), (W - PAD, 130)], fill=LGRAY, width=1)
 
-    # Weather card outline
-    draw.rounded_rectangle([50, 190, W - 50, 460], radius=20, outline="#1F2937", width=2)
-    
-    # ─── MTA SECTION ───
-    draw.line([(60, 480), (W - 60, 480)], fill="#1F2937", width=2)
-    draw.text((60, 505), "MTA SUBWAY STATUS", fill=PURPLE_LIGHT, font=font_section)
-    
-    if mta["status"] == "good":
-        # Green checkmark area
-        draw.rounded_rectangle([60, 550, W - 60, 640], radius=16, fill="#064E3B")
-        draw.text((W // 2, 595), f"✓  {mta['summary']}", fill=GREEN, font=font_mta, anchor="mm")
+    # ── WEATHER ─────────────────────────────────────────
+    draw.text((PAD, 162), "NYC WEATHER", fill=GRAY, font=f_label)
+    draw.text((PAD, 175), f"{weather['temp']}°F", fill=BLACK, font=f_temp)
+    draw.text((PAD + 390, 225), f"{weather['emoji']}  {weather['desc']}", fill=BLACK, font=f_desc, anchor="lm")
+    draw.text((PAD + 390, 275), f"Feels like {weather['feels_like']}°F  ·  Humidity {weather['humidity']}%", fill=GRAY, font=f_sub, anchor="lm")
+    draw.line([(PAD, 370), (W - PAD, 370)], fill=LGRAY, width=1)
+
+    # ── MTA ─────────────────────────────────────────────
+    draw.text((PAD, 395), "MTA SUBWAY", fill=GRAY, font=f_label)
+
+    if mta["good"]:
+        draw.ellipse([PAD, 428, PAD + 18, 446], fill=GREEN)
+        draw.text((PAD + 30, 437), "All lines running normally", fill=BLACK, font=f_mta, anchor="lm")
+        draw.text((PAD + 30, 482), "Check mta.info for details", fill=GRAY, font=f_sub, anchor="lm")
     else:
-        # Red/yellow alert area
-        y_pos = 550
-        for i, alert in enumerate(mta["alerts"][:3]):
-            bg = "#450A0A" if i == 0 else "#422006"
-            draw.rounded_rectangle([60, y_pos, W - 60, y_pos + 58], radius=12, fill=bg)
-            alert_color = RED if i == 0 else YELLOW
-            # Truncate if too long
-            if len(alert) > 45:
-                alert = alert[:42] + "..."
-            draw.text((80, y_pos + 29), f"⚠  {alert}", fill=alert_color, font=font_mta_alert, anchor="lm")
-            y_pos += 68
-        
-        if not mta["alerts"]:
-            draw.rounded_rectangle([60, 550, W - 60, 610], radius=12, fill="#1F2937")
-            draw.text((W // 2, 580), mta["summary"], fill=GRAY, font=font_mta, anchor="mm")
+        y = 428
+        for i, line in enumerate(mta["lines"][:3]):
+            col = RED if i == 0 else YELLOW
+            draw.ellipse([PAD, y, PAD + 18, y + 18], fill=col)
+            draw.text((PAD + 30, y + 9), line[:52], fill=BLACK, font=f_sub, anchor="lm")
+            y += 46
+        draw.text((PAD + 30, y + 8), "Check mta.info for details", fill=GRAY, font=f_sub, anchor="lm")
 
-    # ─── BOTTOM CTA SECTION ───
-    draw.line([(60, 780), (W - 60, 780)], fill="#1F2937", width=2)
-    
-    # Purple CTA box
-    draw.rounded_rectangle([60, 805, W - 60, 960], radius=24, fill="#1E1B4B")
-    draw.rounded_rectangle([60, 805, W - 60, 960], radius=24, outline=PURPLE, width=2)
-    
-    draw.text((W // 2, 850), "Buy & sell with your NYC neighbors", fill=WHITE, font=font_cta, anchor="mm")
-    draw.text((W // 2, 898), "Download moonoh — free on App Store & Google Play", fill=PURPLE_LIGHT, font=font_weather_small, anchor="mm")
-    draw.text((W // 2, 938), "moon-oh.com", fill=PURPLE, font=font_cta, anchor="mm")
+    draw.line([(PAD, 555), (W - PAD, 555)], fill=LGRAY, width=1)
 
-    # Bottom moonoh dot
-    draw.ellipse([W//2 - 6, 985, W//2 + 6, 997], fill=PURPLE)
+    # ── MOONOH ──────────────────────────────────────────
+    draw.text((PAD, 600), "Buy & Sell with Your NYC Neighbors on moonoh", fill=BLACK, font=f_tag)
+
+    # moon-oh.com underlined in accent
+    draw.text((PAD, 665), "moon-oh.com", fill=ACCENT, font=f_url)
+    bb = draw.textbbox((PAD, 665), "moon-oh.com", font=f_url)
+    draw.line([(bb[0], bb[3] + 3), (bb[2], bb[3] + 3)], fill=ACCENT, width=2)
 
     return img
 
-@app.route("/generate", methods=["GET"])
+@app.route("/generate")
 def generate():
     weather = get_weather()
-    mta = get_mta_status()
-    
+    mta = get_mta()
     img = create_image(weather, mta)
-    
+
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=95)
     buf.seek(0)
-    
+
     today_str = datetime.datetime.now().strftime("%Y-%m-%d")
-    result = cloudinary.uploader.upload(
-        buf,
-        public_id=f"moonoh_daily_{today_str}",
-        overwrite=True,
-        resource_type="image"
-    )
-    
+    result = cloudinary.uploader.upload(buf, public_id=f"moonoh_daily_{today_str}", overwrite=True, resource_type="image")
     image_url = result["secure_url"]
-    
-    # Build caption
-    weather_line = f"{weather['emoji']} {weather['temp']}°F · {weather['desc']} · Feels like {weather['feels_like']}°F"
-    
-    if mta["status"] == "good":
-        mta_line = "🚇 All subway lines running normally"
+
+    if mta["good"]:
+        mta_text = "🚇 All subway lines running normally"
     else:
-        mta_line = "🚨 MTA Delays:\n" + "\n".join(f"• {a}" for a in mta["alerts"][:3])
-    
+        mta_text = "🚨 MTA Delays:\n" + "\n".join(f"• {l}" for l in mta["lines"])
+
+    w = weather
     caption = f"""🌆 Good morning, New York!
 
-{weather_line}
+☀️ {w['temp']}°F · {w['desc']} · Feels like {w['feels_like']}°F
 
-{mta_line}
+{mta_text}
 
 —
 
-moonoh is NYC's free neighborhood marketplace 🗽
-Buy & sell with your neighbors — no fees, no hassle.
+Buy & Sell with Your NYC Neighbors on moonoh 🗽
+No fees. List in seconds. Meet your neighbors.
 
-📲 Download free → moon-oh.com
-Available on App Store & Google Play
+📲 moon-oh.com
 
-#NYC #NewYork #NYCLife #NewYorkCity #NYCWeather #MTA #MTASubway #moonoh #NYCMarketplace #BuyAndSell #NYCNeighborhood #LocalNYC #GoodMorningNYC #NYCSubway #FreeListing"""
-    
-    return jsonify({
-        "image_url": image_url,
-        "caption": caption,
-        "weather": weather,
-        "mta": mta
-    })
+#NYC #NewYork #NYCLife #NYCWeather #MTA #moonoh #NYCMarketplace #GoodMorningNYC"""
 
-@app.route("/health", methods=["GET"])
+    return jsonify({"image_url": image_url, "caption": caption, "weather": w, "mta": mta})
+
+@app.route("/health")
 def health():
-    return jsonify({"status": "ok"})
+    return jsonify({"ok": True})
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
