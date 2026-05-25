@@ -306,19 +306,23 @@ def threads_post():
 
 @app.route("/test_mta")
 def test_mta():
-    import requests as _req
-    results = {}
-    urls = {
-        "gtfs_1234567": "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs",
-        "gtfs_ace": "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-ace",
-    }
-    for name, url in urls.items():
-        try:
-            r = _req.get(url, timeout=8)
-            results[name] = {"status": r.status_code, "size": len(r.content), "preview": r.text[:100]}
-        except Exception as e:
-            results[name] = {"error": str(e)}
-    return jsonify(results)
+    try:
+        from nyct_gtfs import NYCTFeed
+        # 1,2,3,4,5,6,7 feed
+        feed = NYCTFeed("1")
+        trips = feed.trips
+        delayed = []
+        for t in trips:
+            try:
+                if t.underway:
+                    delay = getattr(t, "delay", 0) or 0
+                    if delay > 180:
+                        delayed.append({"route": t.route_id, "delay_min": delay // 60})
+            except:
+                pass
+        return jsonify({"ok": True, "total_trips": len(trips), "delayed": delayed[:10]})
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 @app.route("/health")
 def health():
