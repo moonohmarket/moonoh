@@ -304,6 +304,18 @@ def threads_post():
     except Exception as e:
         return jsonify({"error": str(e)})
 
+@app.route("/test_mta")
+def test_mta():
+    import requests as _req
+    try:
+        r = _req.get(
+            "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alert.json",
+            timeout=8
+        )
+        return jsonify({"status": r.status_code, "size": len(r.content), "preview": r.text[:200]})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
 @app.route("/health")
 def health():
     return jsonify({"ok": True, "threads_token": bool(THREADS_ACCESS_TOKEN), "ig_token": bool(INSTAGRAM_ACCESS_TOKEN)})
