@@ -146,23 +146,26 @@ def create_image(weather, mta):
     draw.text((PAD, 560), "MTA SUBWAY", fill=GRAY, font=f_label)
 
     if mta.get("unavailable"):
-        dot_y = 625
-        draw.ellipse([PAD, dot_y, PAD + 32, dot_y + 32], fill="#888888")
-        draw.text((PAD + 50, dot_y + 16), "Status unavailable", fill=GRAY, font=f_mta, anchor="lm")
-        draw.text((PAD + 50, dot_y + 84), "Check mta.info for service status", fill=GRAY, font=f_sub, anchor="lm")
+        dot_y = 620
+        draw.ellipse([PAD, dot_y, PAD + 28, dot_y + 28], fill="#888888")
+        draw.text((PAD + 46, dot_y + 14), "Status unavailable", fill=GRAY, font=f_mta, anchor="lm")
+        draw.text((PAD + 46, dot_y + 62), "Check mta.info for service status", fill=GRAY, font=f_sub, anchor="lm")
     elif mta["good"]:
-        dot_y = 625
-        draw.ellipse([PAD, dot_y, PAD + 32, dot_y + 32], fill=GREEN)
-        draw.text((PAD + 50, dot_y + 16), "All lines running normally", fill=BLACK, font=f_mta, anchor="lm")
-        draw.text((PAD + 50, dot_y + 84), "mta.info for full schedule", fill=GRAY, font=f_sub, anchor="lm")
+        dot_y = 620
+        draw.ellipse([PAD, dot_y, PAD + 28, dot_y + 28], fill=GREEN)
+        draw.text((PAD + 46, dot_y + 14), "All lines running normally", fill=BLACK, font=f_mta, anchor="lm")
+        draw.text((PAD + 46, dot_y + 62), "mta.info for full schedule", fill=GRAY, font=f_sub, anchor="lm")
     else:
-        y = 625
-        for i, line in enumerate(mta["lines"][:2]):
+        lines = mta["lines"][:3]
+        row_h = (220) // max(len(lines), 1)
+        row_h = min(row_h, 80)
+        y = 615
+        for i, line in enumerate(lines):
             col = RED if i == 0 else YELLOW
-            draw.ellipse([PAD, y, PAD + 32, y + 32], fill=col)
-            draw.text((PAD + 50, y + 16), line[:40], fill=BLACK, font=f_sub, anchor="lm")
-            y += 90
-        draw.text((PAD + 50, y + 8), "mta.info for details", fill=GRAY, font=f_sub, anchor="lm")
+            draw.ellipse([PAD, y, PAD + 28, y + 28], fill=col)
+            draw.text((PAD + 46, y + 14), line[:42], fill=BLACK, font=f_sub, anchor="lm")
+            y += row_h
+        draw.text((PAD + 46, y + 4), "mta.info for details", fill=GRAY, font=f_sub, anchor="lm")
 
     draw.line([(PAD, 800), (W - PAD, 800)], fill=LGRAY, width=2)
 
