@@ -44,29 +44,37 @@ def get_weather():
 
 def get_mta():
     try:
+        api_key = _os.environ.get("MTA_API_KEY", "")
+        headers = {"x-api-key": api_key} if api_key else {}
         r = requests.get(
             "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alert.json",
+            headers=headers,
             timeout=8
         )
         if r.status_code == 200:
             data = r.json()
             alerts = []
             seen = set()
-            for entity in data.get("entity", [])[:30]:
+            for entity in data.get("entity", [])[:50]:
                 alert = entity.get("alert", {})
                 header = alert.get("header_text", {}).get("translation", [{}])[0].get("text", "")
                 for ie in alert.get("informed_entity", []):
                     route = ie.get("route_id", "")
-                    if route and route not in seen and len(alerts) < 2:
-                        if any(w in header.lower() for w in ["delay", "suspend", "skip", "reroute", "service change"]):
+                    if route and route not in seen and len(alerts) < 3:
+                        if any(w in header.lower() for w in [
+                            "delay", "suspend", "skip", "reroute", "service change",
+                            "local", "express", "detour", "no service", "reduced"
+                        ]):
                             seen.add(route)
-                            alerts.append(f"{route}  {header.split('.')[0][:35]}")
+                            alerts.append(f"{route}  {header.split('.')[0][:40]}")
             if not alerts:
-                return {"good": True, "lines": []}
-            return {"good": False, "lines": alerts}
+                return {"good": True, "lines": [], "unavailable": False}
+            return {"good": False, "lines": alerts, "unavailable": False}
+        else:
+            # API not reachable — be honest
+            return {"good": False, "lines": [], "unavailable": True}
     except:
-        pass
-    return {"good": True, "lines": []}
+        return {"good": False, "lines": [], "unavailable": True}
 
 def create_image(weather, mta):
     W, H = 1080, 1080
@@ -122,7 +130,12 @@ def create_image(weather, mta):
     # ── MTA SECTION (y: 560–800) ──
     draw.text((PAD, 560), "MTA SUBWAY", fill=GRAY, font=f_label)
 
-    if mta["good"]:
+    if mta.get("unavailable"):
+        dot_y = 625
+        draw.ellipse([PAD, dot_y, PAD + 32, dot_y + 32], fill="#888888")
+        draw.text((PAD + 50, dot_y + 16), "Status unavailable", fill=GRAY, font=f_mta, anchor="lm")
+        draw.text((PAD + 50, dot_y + 84), "Check mta.info for service status", fill=GRAY, font=f_sub, anchor="lm")
+    elif mta["good"]:
         dot_y = 625
         draw.ellipse([PAD, dot_y, PAD + 32, dot_y + 32], fill=GREEN)
         draw.text((PAD + 50, dot_y + 16), "All lines running normally", fill=BLACK, font=f_mta, anchor="lm")
@@ -148,10 +161,12 @@ def create_image(weather, mta):
     return img
 
 def build_caption(weather, mta):
-    if mta["good"]:
+    if mta.get("unavailable"):
+        mta_text = "🚇 MTA status unavailable — check mta.info"
+    elif mta["good"]:
         mta_text = "🚇 All subway lines running normally"
     else:
-        mta_text = "🚨 MTA Delays:\n" + "\n".join(f"• {l}" for l in mta["lines"])
+        mta_text = "🚨 MTA Alerts:\n" + "\n".join(f"• {l}" for l in mta["lines"])
 
     return f"""🌆 Good morning, New York!
 
