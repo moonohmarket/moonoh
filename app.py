@@ -244,6 +244,51 @@ def threads_callback():
         return jsonify({"code": code, "token_response": token_data})
     return jsonify({"message": "No code received"})
 
+@app.route("/threads_post")
+def threads_post():
+    image_url = request.args.get("image_url", "")
+    caption = request.args.get("caption", "")
+    token = THREADS_ACCESS_TOKEN
+
+    if not token:
+        return jsonify({"error": "No Threads token"})
+
+    if not image_url:
+        return jsonify({"error": "No image_url"})
+
+    try:
+        # Step 1: Create media container
+        r1 = requests.post(
+            "https://graph.threads.net/v1.0/me/threads",
+            params={
+                "media_type": "IMAGE",
+                "image_url": image_url,
+                "text": caption[:500],
+                "access_token": token
+            }
+        )
+        data1 = r1.json()
+        container_id = data1.get("id")
+
+        if not container_id:
+            return jsonify({"error": "Failed to create container", "detail": data1})
+
+        # Step 2: Publish
+        import time
+        time.sleep(3)
+        r2 = requests.post(
+            "https://graph.threads.net/v1.0/me/threads_publish",
+            params={
+                "creation_id": container_id,
+                "access_token": token
+            }
+        )
+        data2 = r2.json()
+        return jsonify({"success": True, "thread_id": data2.get("id"), "detail": data2})
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
 @app.route("/health")
 def health():
     return jsonify({"ok": True, "threads_token": bool(THREADS_ACCESS_TOKEN), "ig_token": bool(INSTAGRAM_ACCESS_TOKEN)})
