@@ -143,29 +143,44 @@ def create_image(weather, mta):
     draw.line([(PAD, 540), (W - PAD, 540)], fill=LGRAY, width=2)
 
     # ── MTA SECTION (y: 560–800) ──
-    draw.text((PAD, 560), "MTA SUBWAY", fill=GRAY, font=f_label)
+    # 가용 공간: 560~795 (구분선 800 바로 위까지)
+    MTA_TOP   = 560   # 레이블 상단
+    MTA_BOT   = 795   # 구분선 직전 최대 y
+    CONTENT_Y = 605   # 첫 번째 아이템 dot 시작 y
+    DOT_W     = 28
+    TEXT_X    = PAD + DOT_W + 18
+
+    draw.text((PAD, MTA_TOP), "MTA SUBWAY", fill=GRAY, font=f_label)
 
     if mta.get("unavailable"):
-        dot_y = 620
-        draw.ellipse([PAD, dot_y, PAD + 28, dot_y + 28], fill="#888888")
-        draw.text((PAD + 46, dot_y + 14), "Status unavailable", fill=GRAY, font=f_mta, anchor="lm")
-        draw.text((PAD + 46, dot_y + 62), "Check mta.info for service status", fill=GRAY, font=f_sub, anchor="lm")
+        cy = CONTENT_Y
+        draw.ellipse([PAD, cy, PAD + DOT_W, cy + DOT_W], fill="#888888")
+        draw.text((TEXT_X, cy + DOT_W // 2), "Status unavailable", fill=GRAY, font=f_mta, anchor="lm")
+        draw.text((TEXT_X, cy + DOT_W + 10), "Check mta.info for service status", fill=GRAY, font=f_sub, anchor="lm")
     elif mta["good"]:
-        dot_y = 620
-        draw.ellipse([PAD, dot_y, PAD + 28, dot_y + 28], fill=GREEN)
-        draw.text((PAD + 46, dot_y + 14), "All lines running normally", fill=BLACK, font=f_mta, anchor="lm")
-        draw.text((PAD + 46, dot_y + 62), "mta.info for full schedule", fill=GRAY, font=f_sub, anchor="lm")
+        cy = CONTENT_Y
+        draw.ellipse([PAD, cy, PAD + DOT_W, cy + DOT_W], fill=GREEN)
+        draw.text((TEXT_X, cy + DOT_W // 2), "All lines running normally", fill=BLACK, font=f_mta, anchor="lm")
+        draw.text((TEXT_X, cy + DOT_W + 10), "mta.info for full schedule", fill=GRAY, font=f_sub, anchor="lm")
     else:
-        lines = mta["lines"][:3]
-        row_h = (220) // max(len(lines), 1)
-        row_h = min(row_h, 80)
-        y = 615
+        lines = mta["lines"][:4]  # 최대 4개
+        n = len(lines)
+        # 가용 높이에서 "mta.info" 줄(60px) 뺀 뒤 균등 배분
+        available = MTA_BOT - CONTENT_Y - 60
+        row_h = max(44, min(72, available // n))
+
+        cy = CONTENT_Y
         for i, line in enumerate(lines):
             col = RED if i == 0 else YELLOW
-            draw.ellipse([PAD, y, PAD + 28, y + 28], fill=col)
-            draw.text((PAD + 46, y + 14), line[:42], fill=BLACK, font=f_sub, anchor="lm")
-            y += row_h
-        draw.text((PAD + 46, y + 4), "mta.info for details", fill=GRAY, font=f_sub, anchor="lm")
+            draw.ellipse([PAD, cy, PAD + DOT_W, cy + DOT_W], fill=col)
+            # 텍스트가 너무 길면 폰트 크기 줄이기
+            txt = line[:45]
+            draw.text((TEXT_X, cy + DOT_W // 2), txt, fill=BLACK, font=f_sub, anchor="lm")
+            cy += row_h
+
+        # "mta.info" 줄은 항상 마지막 아이템 아래, 구분선 위에
+        note_y = min(cy + 4, MTA_BOT - 52)
+        draw.text((TEXT_X, note_y), "mta.info for details", fill=GRAY, font=f_sub, anchor="lm")
 
     draw.line([(PAD, 800), (W - PAD, 800)], fill=LGRAY, width=2)
 
