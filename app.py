@@ -45,10 +45,7 @@ def get_weather():
 def get_mta():
     try:
         from nyct_gtfs import NYCTFeed
-        import os as _os
 
-        # 4/5/6/7 + S feed (numbered lines)
-        # ACE, BDFM, NQRW, L, G, JZ, SI feeds도 체크
         feeds_to_check = ['4', 'A', 'N', 'B', 'G', 'J', 'L', 'SI']
         alerts = []
         seen_routes = set()
@@ -62,16 +59,28 @@ def get_mta():
                     route = trip.route_id
                     if route in seen_routes:
                         continue
-                    try:
-                        delay = trip.delay  # seconds
-                        if delay and delay >= 180:  # 3분 이상 delay
-                            seen_routes.add(route)
-                            mins = delay // 60
+                    # has_delay_alert: MTA가 공식으로 delay 표시한 trip
+                    if trip.has_delay_alert:
+                        seen_routes.add(route)
+                        # raw protobuf에서 delay 초 추출
+                        delay_sec = 0
+                        try:
+                            for stu in trip._trip_update.stop_time_update:
+                                if stu.HasField('arrival') and stu.arrival.delay > 0:
+                                    delay_sec = stu.arrival.delay
+                                    break
+                                if stu.HasField('departure') and stu.departure.delay > 0:
+                                    delay_sec = stu.departure.delay
+                                    break
+                        except:
+                            pass
+                        if delay_sec >= 60:
+                            mins = delay_sec // 60
                             alerts.append(f"{route} train  ~{mins} min delay")
-                            if len(alerts) >= 3:
-                                break
-                    except:
-                        pass
+                        else:
+                            alerts.append(f"{route} train  delayed")
+                        if len(alerts) >= 3:
+                            break
             except:
                 pass
 
@@ -314,52 +323,29 @@ def threads_post():
 def test_mta():
     try:
         from nyct_gtfs import NYCTFeed
-        feed = NYCTFeed("4")
-        trips = feed.trips
-        sample = []
-        delays = []
-        for t in trips[:5]:
-            info = {
-                "route": t.route_id,
-                "has_delay_attr": hasattr(t, "delay"),
-            }
+        results = {}
+        for line in ["4", "A", "N", "L"]:
             try:
-                info["delay"] = t.delay
+                feed = NYCTFeed(line)
+                delayed_trips = []
+                for t in feed.trips:
+                    if t.has_delay_alert:
+                        delay_sec = 0
+                        try:
+                            for stu in t._trip_update.stop_time_update:
+                                if stu.HasField("arrival") and stu.arrival.delay > 0:
+                                    delay_sec = stu.arrival.delay
+                                    break
+                                if stu.HasField("departure") and stu.departure.delay > 0:
+                                    delay_sec = stu.departure.delay
+                                    break
+                        except:
+                            pass
+                        delayed_trips.append({"route": t.route_id, "delay_sec": delay_sec})
+                results[line] = {"total": len(feed.trips), "delayed": delayed_trips[:5]}
             except Exception as e:
-                info["delay_err"] = str(e)
-            try:
-                info["underway"] = t.underway
-            except:
-                pass
-            # stop_time_updates에서 직접 delay 확인
-            try:
-                updates = t.stop_time_updates
-                if updates:
-                    first = updates[0]
-                    info["first_stop"] = {
-                        "stop_id": getattr(first, "stop_id", None),
-                        "arrival_delay": getattr(first.arrival, "delay", None) if hasattr(first, "arrival") and first.arrival else None,
-                        "departure_delay": getattr(first.departure, "delay", None) if hasattr(first, "departure") and first.departure else None,
-                    }
-            except Exception as e:
-                info["stop_err"] = str(e)
-            sample.append(info)
-
-        # delay 있는 trip 찾기
-        for t in trips:
-            try:
-                updates = t.stop_time_updates
-                for u in (updates or []):
-                    arr_delay = getattr(u.arrival, "delay", None) if hasattr(u, "arrival") and u.arrival else None
-                    dep_delay = getattr(u.departure, "delay", None) if hasattr(u, "departure") and u.departure else None
-                    d = arr_delay or dep_delay or 0
-                    if d and abs(d) >= 120:
-                        delays.append({"route": t.route_id, "delay_sec": d, "stop": getattr(u, "stop_id", "?")})
-                        break
-            except:
-                pass
-
-        return jsonify({"ok": True, "total_trips": len(trips), "sample": sample, "delays_found": delays[:10]})
+                results[line] = {"error": str(e)}
+        return jsonify({"ok": True, "results": results})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
