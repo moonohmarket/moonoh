@@ -307,14 +307,18 @@ def threads_post():
 @app.route("/test_mta")
 def test_mta():
     import requests as _req
-    try:
-        r = _req.get(
-            "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alert.json",
-            timeout=8
-        )
-        return jsonify({"status": r.status_code, "size": len(r.content), "preview": r.text[:200]})
-    except Exception as e:
-        return jsonify({"error": str(e)})
+    results = {}
+    urls = {
+        "gtfs_1234567": "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs",
+        "gtfs_ace": "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-ace",
+    }
+    for name, url in urls.items():
+        try:
+            r = _req.get(url, timeout=8)
+            results[name] = {"status": r.status_code, "size": len(r.content), "preview": r.text[:100]}
+        except Exception as e:
+            results[name] = {"error": str(e)}
+    return jsonify(results)
 
 @app.route("/health")
 def health():
