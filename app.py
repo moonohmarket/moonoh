@@ -44,36 +44,42 @@ def get_weather():
 
 def get_mta():
     try:
-        api_key = _os.environ.get("MTA_API_KEY", "")
-        headers = {"x-api-key": api_key} if api_key else {}
-        r = requests.get(
-            "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alert.json",
-            headers=headers,
-            timeout=8
-        )
-        if r.status_code == 200:
-            data = r.json()
-            alerts = []
-            seen = set()
-            for entity in data.get("entity", [])[:50]:
-                alert = entity.get("alert", {})
-                header = alert.get("header_text", {}).get("translation", [{}])[0].get("text", "")
-                for ie in alert.get("informed_entity", []):
-                    route = ie.get("route_id", "")
-                    if route and route not in seen and len(alerts) < 3:
-                        if any(w in header.lower() for w in [
-                            "delay", "suspend", "skip", "reroute", "service change",
-                            "local", "express", "detour", "no service", "reduced"
-                        ]):
-                            seen.add(route)
-                            alerts.append(f"{route}  {header.split('.')[0][:40]}")
-            if not alerts:
-                return {"good": True, "lines": [], "unavailable": False}
-            return {"good": False, "lines": alerts, "unavailable": False}
-        else:
-            # API not reachable — be honest
-            return {"good": False, "lines": [], "unavailable": True}
-    except:
+        from nyct_gtfs import NYCTFeed
+        import os as _os
+
+        # 4/5/6/7 + S feed (numbered lines)
+        # ACE, BDFM, NQRW, L, G, JZ, SI feeds도 체크
+        feeds_to_check = ['4', 'A', 'N', 'B', 'G', 'J', 'L', 'SI']
+        alerts = []
+        seen_routes = set()
+
+        for line in feeds_to_check:
+            if len(alerts) >= 3:
+                break
+            try:
+                feed = NYCTFeed(line)
+                for trip in feed.trips:
+                    route = trip.route_id
+                    if route in seen_routes:
+                        continue
+                    try:
+                        delay = trip.delay  # seconds
+                        if delay and delay >= 180:  # 3분 이상 delay
+                            seen_routes.add(route)
+                            mins = delay // 60
+                            alerts.append(f"{route} train  ~{mins} min delay")
+                            if len(alerts) >= 3:
+                                break
+                    except:
+                        pass
+            except:
+                pass
+
+        if not alerts:
+            return {"good": True, "lines": [], "unavailable": False}
+        return {"good": False, "lines": alerts, "unavailable": False}
+
+    except Exception as e:
         return {"good": False, "lines": [], "unavailable": True}
 
 def create_image(weather, mta):
