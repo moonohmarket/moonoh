@@ -314,21 +314,54 @@ def threads_post():
 def test_mta():
     try:
         from nyct_gtfs import NYCTFeed
-        # 1,2,3,4,5,6,7 feed
-        feed = NYCTFeed("1")
+        feed = NYCTFeed("4")
         trips = feed.trips
-        delayed = []
-        for t in trips:
+        sample = []
+        delays = []
+        for t in trips[:5]:
+            info = {
+                "route": t.route_id,
+                "has_delay_attr": hasattr(t, "delay"),
+            }
             try:
-                if t.underway:
-                    delay = getattr(t, "delay", 0) or 0
-                    if delay > 180:
-                        delayed.append({"route": t.route_id, "delay_min": delay // 60})
+                info["delay"] = t.delay
+            except Exception as e:
+                info["delay_err"] = str(e)
+            try:
+                info["underway"] = t.underway
             except:
                 pass
-        return jsonify({"ok": True, "total_trips": len(trips), "delayed": delayed[:10]})
+            # stop_time_updates에서 직접 delay 확인
+            try:
+                updates = t.stop_time_updates
+                if updates:
+                    first = updates[0]
+                    info["first_stop"] = {
+                        "stop_id": getattr(first, "stop_id", None),
+                        "arrival_delay": getattr(first.arrival, "delay", None) if hasattr(first, "arrival") and first.arrival else None,
+                        "departure_delay": getattr(first.departure, "delay", None) if hasattr(first, "departure") and first.departure else None,
+                    }
+            except Exception as e:
+                info["stop_err"] = str(e)
+            sample.append(info)
+
+        # delay 있는 trip 찾기
+        for t in trips:
+            try:
+                updates = t.stop_time_updates
+                for u in (updates or []):
+                    arr_delay = getattr(u.arrival, "delay", None) if hasattr(u, "arrival") and u.arrival else None
+                    dep_delay = getattr(u.departure, "delay", None) if hasattr(u, "departure") and u.departure else None
+                    d = arr_delay or dep_delay or 0
+                    if d and abs(d) >= 120:
+                        delays.append({"route": t.route_id, "delay_sec": d, "stop": getattr(u, "stop_id", "?")})
+                        break
+            except:
+                pass
+
+        return jsonify({"ok": True, "total_trips": len(trips), "sample": sample, "delays_found": delays[:10]})
     except Exception as e:
-        return jsonify({"error": str(e)})
+        return jsonify({"ok": False, "error": str(e)})
 
 @app.route("/health")
 def health():
