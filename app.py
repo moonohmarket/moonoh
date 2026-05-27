@@ -518,11 +518,11 @@ def get_craigslist_data():
     }
 
     categories = {
-        '🛋 Furniture': 'fua',
-        '📱 Electronics': 'ela',
-        '👕 Clothing': 'cla',
-        '🚲 Bikes': 'bia',
-        '🆓 Free': 'zip',
+        'Furniture': 'fua',
+        'Electronics': 'ela',
+        'Clothing': 'cla',
+        'Bikes': 'bia',
+        'Free': 'zip',
     }
 
     cat_counts = {}
@@ -557,7 +557,7 @@ def get_craigslist_data():
                 elif price_val > 0:
                     all_prices.append(price_val)
                     if len(picks) < 3 and 20 <= price_val <= 300:
-                        picks.append({'title': title[:38], 'price': price_text, 'cat': cat_name.split(' ')[1]})
+                        picks.append({'title': title[:38], 'price': price_text, 'cat': cat_name})
         except:
             pass
 
@@ -658,12 +658,15 @@ def slide_categories(data):
         d.text((PAD, 228), 'Today on NYC Craigslist', fill=c['gray'], font=f['sub'])
 
         cats = sorted(data['cat_counts'].items(), key=lambda x: -x[1])
+        emoji_map = {'Furniture': '🛋', 'Electronics': '📱', 'Clothing': '👕', 'Bikes': '🚲', 'Free': '🆓'}
         max_count = cats[0][1] if cats else 1
         BAR_X = PAD + 320
         BAR_MAX_W = W - BAR_X - PAD - 80
         y = 310
 
         for i, (name, count) in enumerate(cats):
+            emoji = emoji_map.get(name, '')
+            display = f'{name}'
             # 순위
             d.text((PAD, y + 28), f'#{i+1}', fill=c['accent'], font=f['label'], anchor='lm')
             # 카테고리명
