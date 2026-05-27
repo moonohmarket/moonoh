@@ -164,7 +164,7 @@ def create_image(weather, mta):
     content_y = lbl_bb[3] + 18  # 레이블 하단 + 18px 여백
 
     def draw_row(cy, dot_color, main_text, main_font, sub_text=None, sub_font=None):
-        """dot + 메인텍스트 + 서브텍스트 한 줄 그리기. 다음 아이템 시작 y 반환"""
+        """Draw dot + main text + sub text. Returns next y."""
         # dot은 메인텍스트 중앙에 맞춤
         main_bb = draw.textbbox((TEXT_X, cy), main_text, font=main_font)
         main_h = main_bb[3] - main_bb[1]
@@ -631,21 +631,21 @@ def slide_cover(data):
         today = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5))).strftime('%b %d')
         d.text((W - PAD, 80), today, fill='#AAAAFF', font=f['sub'], anchor='rm')
 
-        d.text((PAD, 180), 'NYC 중고거래', fill=c['white'], font=f['title'])
-        d.text((PAD, 262), '오늘의 트렌드', fill='#CCCCFF', font=f['title'])
+        d.text((PAD, 180), 'NYC Secondhand', fill=c['white'], font=f['title'])
+        d.text((PAD, 262), 'Today\'s Trends', fill='#CCCCFF', font=f['title'])
 
         # 총 매물 수 big number
         d.text((PAD, 360), f"{data['total']:,}개", fill=c['yellow'], font=f['num'], anchor='lm')
-        d.text((PAD + 260, 360), '오늘 올라온 매물', fill=c['white'], font=f['body'], anchor='lm')
+        d.text((PAD + 260, 360), 'listings today', fill=c['white'], font=f['body'], anchor='lm')
 
         # 하단 흰 영역
         d.rectangle([0, 420, W, H], fill=c['white'])
-        d.text((PAD, 480), '카테고리 랭킹  ·  가격 분포', fill=c['gray'], font=f['sub'])
-        d.text((PAD, 538), '오늘의 픽  ·  무료 나눔', fill=c['gray'], font=f['sub'])
+        d.text((PAD, 480), 'Category Rankings  ·  Price Breakdown', fill=c['gray'], font=f['sub'])
+        d.text((PAD, 538), 'Today\'s Picks  ·  Free Stuff', fill=c['gray'], font=f['sub'])
 
         # 큰 화살표 힌트
         d.text((W // 2, 660), '→', fill=c['accent'], font=f['big'], anchor='mm')
-        d.text((W // 2, 760), '스와이프해서 보기', fill=c['gray'], font=f['body'], anchor='mm')
+        d.text((W // 2, 760), 'Swipe to explore', fill=c['gray'], font=f['body'], anchor='mm')
 
         draw_footer(d, f, c, PAD, W, H)
     return make_slide(draw)
@@ -654,8 +654,8 @@ def slide_cover(data):
 def slide_categories(data):
     def draw(img, d, f, c, PAD, W, H):
         draw_header_bar(d, f, c, PAD, W)
-        d.text((PAD, 148), '카테고리 랭킹', fill=c['black'], font=f['title'])
-        d.text((PAD, 228), '오늘 NYC Craigslist 기준', fill=c['gray'], font=f['sub'])
+        d.text((PAD, 148), 'Category Rankings', fill=c['black'], font=f['title'])
+        d.text((PAD, 228), 'Today on NYC Craigslist', fill=c['gray'], font=f['sub'])
 
         cats = sorted(data['cat_counts'].items(), key=lambda x: -x[1])
         max_count = cats[0][1] if cats else 1
@@ -683,8 +683,8 @@ def slide_categories(data):
 def slide_prices(data):
     def draw(img, d, f, c, PAD, W, H):
         draw_header_bar(d, f, c, PAD, W)
-        d.text((PAD, 148), '가격대 분포', fill=c['black'], font=f['title'])
-        d.text((PAD, 228), f"평균 거래가  ${data['avg_price']}", fill=c['accent'], font=f['label'])
+        d.text((PAD, 148), 'Price Breakdown', fill=c['black'], font=f['title'])
+        d.text((PAD, 228), f"Avg. price  ${data['avg_price']}", fill=c['accent'], font=f['label'])
 
         buckets = data['price_buckets']
         total_b = sum(buckets.values()) or 1
@@ -705,7 +705,7 @@ def slide_prices(data):
         # 인사이트
         dominant = max(buckets, key=buckets.get)
         d.rectangle([PAD, 700, W - PAD, 820], fill=c['bg2'])
-        d.text((PAD + 20, 760), f'💡  오늘 NYC 매물의 {int(buckets[dominant]/total_b*100)}%가 {dominant}', fill=c['black'], font=f['body'], anchor='lm')
+        d.text((PAD + 20, 760), f'💡  {int(buckets[dominant]/total_b*100)}% of NYC listings today are {dominant}', fill=c['black'], font=f['body'], anchor='lm')
 
         draw_footer(d, f, c, PAD, W, H)
     return make_slide(draw)
@@ -714,12 +714,12 @@ def slide_prices(data):
 def slide_picks(data):
     def draw(img, d, f, c, PAD, W, H):
         draw_header_bar(d, f, c, PAD, W)
-        d.text((PAD, 148), '오늘의 픽 🔥', fill=c['black'], font=f['title'])
-        d.text((PAD, 228), '$20–$300 추천 매물', fill=c['gray'], font=f['sub'])
+        d.text((PAD, 148), 'Today\'s Picks 🔥', fill=c['black'], font=f['title'])
+        d.text((PAD, 228), 'Handpicked deals $20–$300', fill=c['gray'], font=f['sub'])
 
         picks = data['picks']
         if not picks:
-            d.text((W // 2, H // 2), '오늘은 픽이 없어요', fill=c['gray'], font=f['body'], anchor='mm')
+            d.text((W // 2, H // 2), 'No picks today', fill=c['gray'], font=f['body'], anchor='mm')
         else:
             y = 310
             for i, pick in enumerate(picks):
@@ -734,7 +734,7 @@ def slide_picks(data):
                 d.text((PAD + 180, y + 96), pick['cat'], fill=c['gray'], font=f['tag'], anchor='lm')
                 y += 160
 
-        d.text((PAD, H - 170), '📲 moonoh에서 직접 올려보세요', fill=c['accent'], font=f['label'])
+        d.text((PAD, H - 170), '📲 List yours on moonoh', fill=c['accent'], font=f['label'])
         draw_footer(d, f, c, PAD, W, H)
     return make_slide(draw)
 
@@ -744,14 +744,14 @@ def slide_free(data):
         # 초록 상단
         img.paste((34, 197, 94), (0, 0, W, 380))
         d.text((PAD, 80), 'moonoh', fill=c['white'], font=f['logo'], anchor='lm')
-        d.text((PAD, 168), '🆓 오늘의 무료 나눔', fill=c['white'], font=f['title'])
-        d.text((PAD, 260), 'NYC Craigslist 무료 매물', fill='#AAFFCC', font=f['sub'])
+        d.text((PAD, 168), '🆓 Free Stuff Today', fill=c['white'], font=f['title'])
+        d.text((PAD, 260), 'Free listings on NYC Craigslist', fill='#AAFFCC', font=f['sub'])
 
         d.rectangle([0, 380, W, H], fill=c['white'])
 
         free = data['free']
         if not free:
-            d.text((W // 2, 600), '오늘은 무료 나눔이 없어요', fill=c['gray'], font=f['body'], anchor='mm')
+            d.text((W // 2, 600), 'No free listings today', fill=c['gray'], font=f['body'], anchor='mm')
         else:
             y = 420
             for item in free[:4]:
@@ -759,7 +759,7 @@ def slide_free(data):
                 d.text((PAD + 36, y), item, fill=c['black'], font=f['body'], anchor='lm')
                 y += 74
 
-        d.text((PAD, 800), '무료 나눔도 moonoh에서 🗽', fill=c['accent'], font=f['label'])
+        d.text((PAD, 800), 'List for free on moonoh 🗽', fill=c['accent'], font=f['label'])
         draw_footer(d, f, c, PAD, W, H)
     return make_slide(draw)
 
@@ -794,17 +794,17 @@ def generate_carousel():
             )
             image_urls.append(result['secure_url'])
 
-        caption = f"""🗽 NYC 중고거래 오늘의 트렌드
+        caption = f"""🗽 NYC Secondhand Market — Today's Trends
 
-오늘 Craigslist NYC에 {data['total']:,}개 매물이 올라왔어요.
-평균 거래가 ${data['avg_price']}
+Today on NYC Craigslist — {data['total']:,} new listings.
+Avg. price ${data['avg_price']}
 
-직거래는 moonoh에서 🏙️
+Buy & sell locally on moonoh 🏙️
 No fees. List in seconds.
 
 📲 moon-oh.com
 
-#NYC #NewYork #중고거래 #NYCLife #moonoh #Craigslist #NYCMarketplace #secondhand #thrift"""
+#NYC #NewYork #secondhand #NYCLife #moonoh #Craigslist #NYCMarketplace #secondhand #thrift"""
 
         return jsonify({
             'ok': True,
