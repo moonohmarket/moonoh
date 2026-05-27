@@ -45,55 +45,57 @@ def get_weather():
 def get_mta():
     try:
         from nyct_gtfs import NYCTFeed
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+        from concurrent.futures import ThreadPoolExecutor, wait as futures_wait
         import threading
 
-        # 각 feed 대표 라인 — 한 feed당 한 번만 호출
-        # '4' = 1234567S, 'A' = ACE, 'N' = NQRW, 'B' = BDFM, 'G', 'J' = JZ, 'L', 'SI'
         feeds_to_check = ['4', 'A', 'N', 'B', 'G', 'J', 'L', 'SI']
-
-        alerts = []
-        seen_routes = set()
+        results = {}
         lock = threading.Lock()
 
         def fetch_feed(line):
-            results = []
+            delayed = {}  # route_id -> max delay_sec
             try:
                 feed = NYCTFeed(line)
                 for trip in feed.trips:
                     route = trip.route_id
-                    if trip.has_delay_alert:
-                        delay_sec = 0
-                        try:
-                            for stu in trip._trip_update.stop_time_update:
-                                if stu.HasField('arrival') and stu.arrival.delay > 0:
-                                    delay_sec = stu.arrival.delay
-                                    break
-                                if stu.HasField('departure') and stu.departure.delay > 0:
-                                    delay_sec = stu.departure.delay
-                                    break
-                        except:
-                            pass
-                        label = f"{route} train  ~{delay_sec // 60} min delay" if delay_sec >= 60 else f"{route} train  delayed"
-                        results.append((route, label))
+                    # raw protobuf에서 직접 delay 초 읽기
+                    try:
+                        for stu in trip._trip_update.stop_time_update:
+                            d = 0
+                            if stu.HasField('arrival') and stu.arrival.delay > d:
+                                d = stu.arrival.delay
+                            if stu.HasField('departure') and stu.departure.delay > d:
+                                d = stu.departure.delay
+                            if d > 0:
+                                # 라인별 최대 delay 추적
+                                if route not in delayed or delayed[route] < d:
+                                    delayed[route] = d
+                                break  # 첫 번째 stop에서 delay 확인되면 충분
+                    except:
+                        pass
             except:
                 pass
-            return results
+            return delayed
 
-        # 병렬로 모든 feed 동시 호출, 전체 10초 제한
         with ThreadPoolExecutor(max_workers=8) as ex:
             futures = {ex.submit(fetch_feed, line): line for line in feeds_to_check}
-            import concurrent.futures
-            done, _ = concurrent.futures.wait(futures, timeout=10)
+            done, _ = futures_wait(futures, timeout=12)
             for f in done:
-                for route, label in f.result():
-                    if route not in seen_routes and len(alerts) < 4:
-                        seen_routes.add(route)
-                        alerts.append(label)
+                try:
+                    results.update(f.result())
+                except:
+                    pass
+
+        # 180초(3분) 이상 delay만 표시
+        alerts = []
+        for route, delay_sec in sorted(results.items()):
+            if delay_sec >= 180:
+                mins = delay_sec // 60
+                alerts.append(f"{route} train  ~{mins} min delay")
 
         if not alerts:
             return {"good": True, "lines": [], "unavailable": False}
-        return {"good": False, "lines": sorted(alerts), "unavailable": False}
+        return {"good": False, "lines": alerts[:4], "unavailable": False}
 
     except Exception as e:
         return {"good": False, "lines": [], "unavailable": True}
