@@ -440,3 +440,66 @@ def test_craigslist():
         return jsonify(results)
     except Exception as e:
         return jsonify({"error": str(e)})
+
+@app.route("/test_craigslist_full")
+def test_craigslist_full():
+    try:
+        from bs4 import BeautifulSoup
+        from collections import Counter
+        import re
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+
+        # 여러 카테고리 동시 수집
+        categories = {
+            'furniture': 'fua',
+            'electronics': 'ela',
+            'clothing': 'cla',
+            'bikes': 'bia',
+            'free': 'zip',
+        }
+
+        cat_counts = {}
+        all_prices = []
+        highlights = []
+
+        for cat_name, cat_code in categories.items():
+            try:
+                r = requests.get(
+                    f'https://newyork.craigslist.org/search/{cat_code}?sort=date&postedToday=1',
+                    headers=headers, timeout=8
+                )
+                if r.status_code == 200:
+                    soup = BeautifulSoup(r.text, 'html.parser')
+                    items = soup.select('li.cl-static-search-result')
+                    cat_counts[cat_name] = len(items)
+
+                    for item in items[:10]:
+                        title = item.select_one('.title')
+                        price = item.select_one('.price')
+                        if title and price:
+                            price_text = price.text.strip()
+                            m = re.search(r'\$(\d+)', price_text)
+                            if m:
+                                all_prices.append(int(m.group(1)))
+                            highlights.append({
+                                'cat': cat_name,
+                                'title': title.text.strip()[:50],
+                                'price': price_text
+                            })
+            except:
+                pass
+
+        avg_price = sum(all_prices) // len(all_prices) if all_prices else 0
+
+        return jsonify({
+            'category_counts': cat_counts,
+            'avg_price': avg_price,
+            'total_items': sum(cat_counts.values()),
+            'highlights': highlights[:10]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)})
