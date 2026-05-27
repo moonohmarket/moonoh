@@ -150,44 +150,72 @@ def create_image(weather, mta):
     draw.line([(PAD, 540), (W - PAD, 540)], fill=LGRAY, width=2)
 
     # ── MTA SECTION (y: 560–800) ──
-    # 가용 공간: 560~795 (구분선 800 바로 위까지)
-    MTA_TOP   = 560   # 레이블 상단
-    MTA_BOT   = 795   # 구분선 직전 최대 y
-    CONTENT_Y = 605   # 첫 번째 아이템 dot 시작 y
-    DOT_W     = 28
-    TEXT_X    = PAD + DOT_W + 18
+    MTA_TOP = 560
+    MTA_BOT = 792   # 구분선(800) 8px 위까지
+    DOT_W   = 26
+    TEXT_X  = PAD + DOT_W + 16
+    LINE_GAP = 10   # 텍스트 줄 간 최소 여백
 
+    # 레이블 그리기
     draw.text((PAD, MTA_TOP), "MTA SUBWAY", fill=GRAY, font=f_label)
+    lbl_bb = draw.textbbox((PAD, MTA_TOP), "MTA SUBWAY", font=f_label)
+    content_y = lbl_bb[3] + 18  # 레이블 하단 + 18px 여백
+
+    def draw_row(cy, dot_color, main_text, main_font, sub_text=None, sub_font=None):
+        """dot + 메인텍스트 + 서브텍스트 한 줄 그리기. 다음 아이템 시작 y 반환"""
+        # dot은 메인텍스트 중앙에 맞춤
+        main_bb = draw.textbbox((TEXT_X, cy), main_text, font=main_font)
+        main_h = main_bb[3] - main_bb[1]
+        dot_y = cy + (main_h - DOT_W) // 2
+        draw.ellipse([PAD, dot_y, PAD + DOT_W, dot_y + DOT_W], fill=dot_color)
+        draw.text((TEXT_X, cy), main_text, fill=BLACK, font=main_font)
+        next_y = main_bb[3] + LINE_GAP
+        if sub_text and sub_font:
+            draw.text((TEXT_X, next_y), sub_text, fill=GRAY, font=sub_font)
+            sub_bb = draw.textbbox((TEXT_X, next_y), sub_text, font=sub_font)
+            next_y = sub_bb[3] + LINE_GAP
+        return next_y
 
     if mta.get("unavailable"):
-        cy = CONTENT_Y
-        draw.ellipse([PAD, cy, PAD + DOT_W, cy + DOT_W], fill="#888888")
-        draw.text((TEXT_X, cy + DOT_W // 2), "Status unavailable", fill=GRAY, font=f_mta, anchor="lm")
-        draw.text((TEXT_X, cy + DOT_W + 10), "Check mta.info for service status", fill=GRAY, font=f_sub, anchor="lm")
+        draw_row(content_y, "#888888", "Status unavailable", f_mta,
+                 "Check mta.info for service status", f_sub)
     elif mta["good"]:
-        cy = CONTENT_Y
-        draw.ellipse([PAD, cy, PAD + DOT_W, cy + DOT_W], fill=GREEN)
-        draw.text((TEXT_X, cy + DOT_W // 2), "All lines running normally", fill=BLACK, font=f_mta, anchor="lm")
-        draw.text((TEXT_X, cy + DOT_W + 10), "mta.info for full schedule", fill=GRAY, font=f_sub, anchor="lm")
+        draw_row(content_y, GREEN, "All lines running normally", f_mta,
+                 "mta.info for full schedule", f_sub)
     else:
-        lines = mta["lines"][:4]  # 최대 4개
+        lines = mta["lines"][:4]
         n = len(lines)
-        # 가용 높이에서 "mta.info" 줄(60px) 뺀 뒤 균등 배분
-        available = MTA_BOT - CONTENT_Y - 60
-        row_h = max(44, min(72, available // n))
 
-        cy = CONTENT_Y
+        # 각 아이템이 차지할 높이 미리 계산해서 MTA_BOT 안에 맞는지 확인
+        # f_sub 48px 기준 한 줄 ~56px + LINE_GAP
+        row_h_est = 56 + LINE_GAP
+        note_h = 56  # "mta.info for details" 줄
+        total_est = content_y + n * row_h_est + LINE_GAP + note_h
+
+        # 공간 초과하면 폰트 축소
+        if total_est > MTA_BOT:
+            # 비율에 맞게 폰트 크기 줄이기
+            available_per_row = max(36, (MTA_BOT - content_y - note_h - LINE_GAP) // n - LINE_GAP)
+            try:
+                _base = os.path.dirname(os.path.abspath(__file__))
+                f_row = ImageFont.truetype(os.path.join(_base, "fonts", "DejaVuSans.ttf"), available_per_row)
+            except:
+                f_row = f_sub
+        else:
+            f_row = f_sub
+
+        cy = content_y
         for i, line in enumerate(lines):
             col = RED if i == 0 else YELLOW
+            dot_y = cy + (available_per_row if total_est > MTA_BOT else 48 - DOT_W) // 2
             draw.ellipse([PAD, cy, PAD + DOT_W, cy + DOT_W], fill=col)
-            # 텍스트가 너무 길면 폰트 크기 줄이기
-            txt = line[:45]
-            draw.text((TEXT_X, cy + DOT_W // 2), txt, fill=BLACK, font=f_sub, anchor="lm")
-            cy += row_h
+            draw.text((TEXT_X, cy), line[:45], fill=BLACK, font=f_row)
+            bb = draw.textbbox((TEXT_X, cy), line[:45], font=f_row)
+            cy = bb[3] + LINE_GAP
 
-        # "mta.info" 줄은 항상 마지막 아이템 아래, 구분선 위에
+        # "mta.info" 줄 — 항상 구분선 위에
         note_y = min(cy + 4, MTA_BOT - 52)
-        draw.text((TEXT_X, note_y), "mta.info for details", fill=GRAY, font=f_sub, anchor="lm")
+        draw.text((TEXT_X, note_y), "mta.info for details", fill=GRAY, font=f_sub)
 
     draw.line([(PAD, 800), (W - PAD, 800)], fill=LGRAY, width=2)
 
