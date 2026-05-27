@@ -45,24 +45,24 @@ def get_weather():
 def get_mta():
     try:
         from nyct_gtfs import NYCTFeed
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+        import threading
 
+        # 각 feed 대표 라인 — 한 feed당 한 번만 호출
+        # '4' = 1234567S, 'A' = ACE, 'N' = NQRW, 'B' = BDFM, 'G', 'J' = JZ, 'L', 'SI'
         feeds_to_check = ['4', 'A', 'N', 'B', 'G', 'J', 'L', 'SI']
+
         alerts = []
         seen_routes = set()
+        lock = threading.Lock()
 
-        for line in feeds_to_check:
-            if len(alerts) >= 3:
-                break
+        def fetch_feed(line):
+            results = []
             try:
                 feed = NYCTFeed(line)
                 for trip in feed.trips:
                     route = trip.route_id
-                    if route in seen_routes:
-                        continue
-                    # has_delay_alert: MTA가 공식으로 delay 표시한 trip
                     if trip.has_delay_alert:
-                        seen_routes.add(route)
-                        # raw protobuf에서 delay 초 추출
                         delay_sec = 0
                         try:
                             for stu in trip._trip_update.stop_time_update:
@@ -74,19 +74,26 @@ def get_mta():
                                     break
                         except:
                             pass
-                        if delay_sec >= 60:
-                            mins = delay_sec // 60
-                            alerts.append(f"{route} train  ~{mins} min delay")
-                        else:
-                            alerts.append(f"{route} train  delayed")
-                        if len(alerts) >= 3:
-                            break
+                        label = f"{route} train  ~{delay_sec // 60} min delay" if delay_sec >= 60 else f"{route} train  delayed"
+                        results.append((route, label))
             except:
                 pass
+            return results
+
+        # 병렬로 모든 feed 동시 호출, 전체 10초 제한
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            futures = {ex.submit(fetch_feed, line): line for line in feeds_to_check}
+            import concurrent.futures
+            done, _ = concurrent.futures.wait(futures, timeout=10)
+            for f in done:
+                for route, label in f.result():
+                    if route not in seen_routes and len(alerts) < 4:
+                        seen_routes.add(route)
+                        alerts.append(label)
 
         if not alerts:
             return {"good": True, "lines": [], "unavailable": False}
-        return {"good": False, "lines": alerts, "unavailable": False}
+        return {"good": False, "lines": sorted(alerts), "unavailable": False}
 
     except Exception as e:
         return {"good": False, "lines": [], "unavailable": True}
