@@ -4,3 +4,4 @@ Pillow
 cloudinary
 gunicorn
 nyct-gtfs
+beautifulsoup4

@@ -410,3 +410,33 @@ def health():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
+@app.route("/test_craigslist")
+def test_craigslist():
+    try:
+        from bs4 import BeautifulSoup
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+        results = {}
+
+        # 1. RSS feed 시도
+        r = requests.get('https://newyork.craigslist.org/search/sss?format=rss&sort=date', headers=headers, timeout=10)
+        results['rss_status'] = r.status_code
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, 'xml')
+            items = soup.find_all('item')[:5]
+            results['rss_items'] = [{'title': i.find('title').text, 'price': i.find('price').text if i.find('price') else None} for i in items]
+
+        # 2. HTML 직접 시도
+        r2 = requests.get('https://newyork.craigslist.org/search/sss?sort=date&postedToday=1', headers=headers, timeout=10)
+        results['html_status'] = r2.status_code
+        if r2.status_code == 200:
+            soup2 = BeautifulSoup(r2.text, 'html.parser')
+            items2 = soup2.select('li.cl-static-search-result')[:5]
+            results['html_items'] = [i.get_text(' ', strip=True)[:80] for i in items2]
+
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({"error": str(e)})
