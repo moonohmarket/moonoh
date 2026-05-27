@@ -503,3 +503,316 @@ def test_craigslist_full():
         })
     except Exception as e:
         return jsonify({"error": str(e)})
+
+# ─────────────────────────────────────────────
+# CRAIGSLIST DATA FETCHER
+# ─────────────────────────────────────────────
+def get_craigslist_data():
+    from bs4 import BeautifulSoup
+    from collections import Counter
+    import re
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+
+    categories = {
+        '🛋 Furniture': 'fua',
+        '📱 Electronics': 'ela',
+        '👕 Clothing': 'cla',
+        '🚲 Bikes': 'bia',
+        '🆓 Free': 'zip',
+    }
+
+    cat_counts = {}
+    all_prices = []
+    picks = []
+    free_items = []
+
+    for cat_name, cat_code in categories.items():
+        try:
+            r = requests.get(
+                f'https://newyork.craigslist.org/search/{cat_code}?sort=date&postedToday=1',
+                headers=headers, timeout=8
+            )
+            if r.status_code != 200:
+                continue
+            soup = BeautifulSoup(r.text, 'html.parser')
+            items = soup.select('li.cl-static-search-result')
+            cat_counts[cat_name] = len(items)
+
+            for item in items[:20]:
+                title_el = item.select_one('.title')
+                price_el = item.select_one('.price')
+                if not title_el:
+                    continue
+                title = title_el.text.strip()
+                price_text = price_el.text.strip() if price_el else ''
+                m = re.search(r'\$(\d+)', price_text)
+                price_val = int(m.group(1)) if m else 0
+
+                if cat_code == 'zip' or price_val == 0:
+                    free_items.append(title[:40])
+                elif price_val > 0:
+                    all_prices.append(price_val)
+                    if len(picks) < 3 and 20 <= price_val <= 300:
+                        picks.append({'title': title[:38], 'price': price_text, 'cat': cat_name.split(' ')[1]})
+        except:
+            pass
+
+    price_buckets = {'Under $50': 0, '$50–200': 0, 'Over $200': 0}
+    for p in all_prices:
+        if p < 50: price_buckets['Under $50'] += 1
+        elif p <= 200: price_buckets['$50–200'] += 1
+        else: price_buckets['Over $200'] += 1
+
+    avg = sum(all_prices) // len(all_prices) if all_prices else 0
+    total = sum(cat_counts.values())
+
+    return {
+        'cat_counts': cat_counts,
+        'price_buckets': price_buckets,
+        'avg_price': avg,
+        'total': total,
+        'picks': picks[:3],
+        'free': free_items[:4],
+    }
+
+
+# ─────────────────────────────────────────────
+# CAROUSEL IMAGE BUILDER
+# ─────────────────────────────────────────────
+def make_slide(draw_fn):
+    W, H = 1080, 1080
+    img = Image.new('RGB', (W, H), '#FFFFFF')
+    draw = ImageDraw.Draw(img)
+    _base = os.path.dirname(os.path.abspath(__file__))
+    BOLD = os.path.join(_base, 'fonts', 'DejaVuSans-Bold.ttf')
+    REG  = os.path.join(_base, 'fonts', 'DejaVuSans.ttf')
+    fonts = {}
+    for name, path, size in [
+        ('logo', BOLD, 72), ('title', BOLD, 68), ('big', BOLD, 110),
+        ('label', BOLD, 38), ('body', REG, 46), ('sub', REG, 40),
+        ('tag', BOLD, 36), ('num', BOLD, 90),
+    ]:
+        try: fonts[name] = ImageFont.truetype(path, size)
+        except: fonts[name] = ImageFont.load_default()
+
+    colors = {
+        'accent': '#3A46E2', 'black': '#111111', 'gray': '#888888',
+        'lgray': '#E5E5E5', 'green': '#22C55E', 'red': '#EF4444',
+        'yellow': '#F59E0B', 'bg2': '#F8F8FF', 'white': '#FFFFFF',
+    }
+    PAD = 64
+
+    draw_fn(img, draw, fonts, colors, PAD, W, H)
+    return img
+
+
+def draw_footer(draw, fonts, colors, PAD, W, H):
+    draw.line([(PAD, H - 110), (W - PAD, H - 110)], fill=colors['lgray'], width=2)
+    draw.text((PAD, H - 88), 'moonoh', fill=colors['accent'], font=fonts['tag'], anchor='lm')
+    draw.text((W - PAD, H - 88), 'moon-oh.com', fill=colors['gray'], font=fonts['tag'], anchor='rm')
+
+
+def draw_header_bar(draw, fonts, colors, PAD, W):
+    draw.text((PAD, 72), 'moonoh', fill=colors['accent'], font=fonts['logo'], anchor='lm')
+    today = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5))).strftime('%b %d, %Y')
+    draw.text((W - PAD, 72), today, fill=colors['gray'], font=fonts['sub'], anchor='rm')
+    draw.line([(PAD, 112), (W - PAD, 112)], fill=colors['lgray'], width=2)
+
+
+def slide_cover(data):
+    def draw(img, d, f, c, PAD, W, H):
+        # 배경 그라데이션 효과 (상단 파란 블록)
+        img.paste((58, 70, 226), (0, 0, W, 420))
+        d.text((PAD, 80), 'moonoh', fill=c['white'], font=f['logo'], anchor='lm')
+        today = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5))).strftime('%b %d')
+        d.text((W - PAD, 80), today, fill='#AAAAFF', font=f['sub'], anchor='rm')
+
+        d.text((PAD, 180), 'NYC 중고거래', fill=c['white'], font=f['title'])
+        d.text((PAD, 262), '오늘의 트렌드', fill='#CCCCFF', font=f['title'])
+
+        # 총 매물 수 big number
+        d.text((PAD, 360), f"{data['total']:,}개", fill=c['yellow'], font=f['num'], anchor='lm')
+        d.text((PAD + 260, 360), '오늘 올라온 매물', fill=c['white'], font=f['body'], anchor='lm')
+
+        # 하단 흰 영역
+        d.rectangle([0, 420, W, H], fill=c['white'])
+        d.text((PAD, 480), '카테고리 랭킹  ·  가격 분포', fill=c['gray'], font=f['sub'])
+        d.text((PAD, 538), '오늘의 픽  ·  무료 나눔', fill=c['gray'], font=f['sub'])
+
+        # 큰 화살표 힌트
+        d.text((W // 2, 660), '→', fill=c['accent'], font=f['big'], anchor='mm')
+        d.text((W // 2, 760), '스와이프해서 보기', fill=c['gray'], font=f['body'], anchor='mm')
+
+        draw_footer(d, f, c, PAD, W, H)
+    return make_slide(draw)
+
+
+def slide_categories(data):
+    def draw(img, d, f, c, PAD, W, H):
+        draw_header_bar(d, f, c, PAD, W)
+        d.text((PAD, 148), '카테고리 랭킹', fill=c['black'], font=f['title'])
+        d.text((PAD, 228), '오늘 NYC Craigslist 기준', fill=c['gray'], font=f['sub'])
+
+        cats = sorted(data['cat_counts'].items(), key=lambda x: -x[1])
+        max_count = cats[0][1] if cats else 1
+        BAR_X = PAD + 320
+        BAR_MAX_W = W - BAR_X - PAD - 80
+        y = 310
+
+        for i, (name, count) in enumerate(cats):
+            # 순위
+            d.text((PAD, y + 28), f'#{i+1}', fill=c['accent'], font=f['label'], anchor='lm')
+            # 카테고리명
+            d.text((PAD + 68, y + 28), name, fill=c['black'], font=f['body'], anchor='lm')
+            # 바 그래프
+            bar_w = int(BAR_MAX_W * count / max_count)
+            bar_colors = [c['accent'], '#6B7BF7', '#9BA8FF', '#B8C2FF', '#D4DAFF']
+            d.rectangle([BAR_X, y + 8, BAR_X + bar_w, y + 48], fill=bar_colors[i])
+            # 수치
+            d.text((BAR_X + bar_w + 10, y + 28), f'{count}', fill=c['gray'], font=f['label'], anchor='lm')
+            y += 110
+
+        draw_footer(d, f, c, PAD, W, H)
+    return make_slide(draw)
+
+
+def slide_prices(data):
+    def draw(img, d, f, c, PAD, W, H):
+        draw_header_bar(d, f, c, PAD, W)
+        d.text((PAD, 148), '가격대 분포', fill=c['black'], font=f['title'])
+        d.text((PAD, 228), f"평균 거래가  ${data['avg_price']}", fill=c['accent'], font=f['label'])
+
+        buckets = data['price_buckets']
+        total_b = sum(buckets.values()) or 1
+        bcolors = [c['green'], c['accent'], c['red']]
+        labels = list(buckets.keys())
+        values = list(buckets.values())
+
+        # 도넛 느낌 대신 큰 가로 바 3개
+        y = 340
+        for i, (label, val) in enumerate(zip(labels, values)):
+            pct = int(val / total_b * 100)
+            bar_w = int((W - PAD * 2) * val / total_b)
+            d.rectangle([PAD, y, PAD + bar_w, y + 72], fill=bcolors[i])
+            d.text((PAD + 16, y + 36), label, fill=c['white'], font=f['label'], anchor='lm')
+            d.text((W - PAD, y + 36), f'{pct}%  ({val}개)', fill=c['gray'], font=f['label'], anchor='rm')
+            y += 108
+
+        # 인사이트
+        dominant = max(buckets, key=buckets.get)
+        d.rectangle([PAD, 700, W - PAD, 820], fill=c['bg2'])
+        d.text((PAD + 20, 760), f'💡  오늘 NYC 매물의 {int(buckets[dominant]/total_b*100)}%가 {dominant}', fill=c['black'], font=f['body'], anchor='lm')
+
+        draw_footer(d, f, c, PAD, W, H)
+    return make_slide(draw)
+
+
+def slide_picks(data):
+    def draw(img, d, f, c, PAD, W, H):
+        draw_header_bar(d, f, c, PAD, W)
+        d.text((PAD, 148), '오늘의 픽 🔥', fill=c['black'], font=f['title'])
+        d.text((PAD, 228), '$20–$300 추천 매물', fill=c['gray'], font=f['sub'])
+
+        picks = data['picks']
+        if not picks:
+            d.text((W // 2, H // 2), '오늘은 픽이 없어요', fill=c['gray'], font=f['body'], anchor='mm')
+        else:
+            y = 310
+            for i, pick in enumerate(picks):
+                bg = c['bg2'] if i % 2 == 0 else c['white']
+                d.rectangle([PAD, y, W - PAD, y + 140], fill=bg)
+                # 가격 badge
+                d.rectangle([PAD + 12, y + 20, PAD + 160, y + 68], fill=c['accent'])
+                d.text((PAD + 86, y + 44), pick['price'], fill=c['white'], font=f['label'], anchor='mm')
+                # 제목
+                d.text((PAD + 180, y + 44), pick['title'], fill=c['black'], font=f['body'], anchor='lm')
+                # 카테고리
+                d.text((PAD + 180, y + 96), pick['cat'], fill=c['gray'], font=f['tag'], anchor='lm')
+                y += 160
+
+        d.text((PAD, H - 170), '📲 moonoh에서 직접 올려보세요', fill=c['accent'], font=f['label'])
+        draw_footer(d, f, c, PAD, W, H)
+    return make_slide(draw)
+
+
+def slide_free(data):
+    def draw(img, d, f, c, PAD, W, H):
+        # 초록 상단
+        img.paste((34, 197, 94), (0, 0, W, 380))
+        d.text((PAD, 80), 'moonoh', fill=c['white'], font=f['logo'], anchor='lm')
+        d.text((PAD, 168), '🆓 오늘의 무료 나눔', fill=c['white'], font=f['title'])
+        d.text((PAD, 260), 'NYC Craigslist 무료 매물', fill='#AAFFCC', font=f['sub'])
+
+        d.rectangle([0, 380, W, H], fill=c['white'])
+
+        free = data['free']
+        if not free:
+            d.text((W // 2, 600), '오늘은 무료 나눔이 없어요', fill=c['gray'], font=f['body'], anchor='mm')
+        else:
+            y = 420
+            for item in free[:4]:
+                d.text((PAD, y), '•', fill=c['green'], font=f['body'], anchor='lm')
+                d.text((PAD + 36, y), item, fill=c['black'], font=f['body'], anchor='lm')
+                y += 74
+
+        d.text((PAD, 800), '무료 나눔도 moonoh에서 🗽', fill=c['accent'], font=f['label'])
+        draw_footer(d, f, c, PAD, W, H)
+    return make_slide(draw)
+
+
+# ─────────────────────────────────────────────
+# CAROUSEL GENERATE ENDPOINT
+# ─────────────────────────────────────────────
+@app.route('/generate_carousel')
+def generate_carousel():
+    try:
+        data = get_craigslist_data()
+        slides = [
+            slide_cover(data),
+            slide_categories(data),
+            slide_prices(data),
+            slide_picks(data),
+            slide_free(data),
+        ]
+
+        now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5)))
+        ts = now.strftime('%Y-%m-%d-%H%M%S')
+        image_urls = []
+
+        for i, slide in enumerate(slides):
+            buf = io.BytesIO()
+            slide.save(buf, format='JPEG', quality=92)
+            buf.seek(0)
+            result = cloudinary.uploader.upload(
+                buf,
+                public_id=f'moonoh_carousel_{ts}_slide{i+1}',
+                overwrite=True
+            )
+            image_urls.append(result['secure_url'])
+
+        caption = f"""🗽 NYC 중고거래 오늘의 트렌드
+
+오늘 Craigslist NYC에 {data['total']:,}개 매물이 올라왔어요.
+평균 거래가 ${data['avg_price']}
+
+직거래는 moonoh에서 🏙️
+No fees. List in seconds.
+
+📲 moon-oh.com
+
+#NYC #NewYork #중고거래 #NYCLife #moonoh #Craigslist #NYCMarketplace #secondhand #thrift"""
+
+        return jsonify({
+            'ok': True,
+            'image_urls': image_urls,
+            'caption': caption,
+            'data': data,
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()})
