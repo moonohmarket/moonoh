@@ -49,30 +49,38 @@ def get_mta():
         import threading
 
         feeds_to_check = ['4', 'A', 'N', 'B', 'G', 'J', 'L', 'SI']
-        results = {}
-        lock = threading.Lock()
+        results = {}  # route_id -> delay_sec (-1 = delayed but no time info)
 
         def fetch_feed(line):
-            delayed = {}  # route_id -> max delay_sec
+            delayed = {}
             try:
                 feed = NYCTFeed(line)
                 for trip in feed.trips:
                     route = trip.route_id
-                    # raw protobuf에서 직접 delay 초 읽기
+                    if route in delayed:
+                        continue
+
+                    # 방법 1: has_delay_alert
+                    is_delayed = trip.has_delay_alert
+
+                    # 방법 2: raw protobuf delay 초
+                    delay_sec = 0
                     try:
                         for stu in trip._trip_update.stop_time_update:
                             d = 0
-                            if stu.HasField('arrival') and stu.arrival.delay > d:
+                            if stu.HasField('arrival') and stu.arrival.delay > 0:
                                 d = stu.arrival.delay
                             if stu.HasField('departure') and stu.departure.delay > d:
                                 d = stu.departure.delay
-                            if d > 0:
-                                # 라인별 최대 delay 추적
-                                if route not in delayed or delayed[route] < d:
-                                    delayed[route] = d
-                                break  # 첫 번째 stop에서 delay 확인되면 충분
+                            if d >= 60:
+                                delay_sec = d
+                                is_delayed = True
+                                break
                     except:
                         pass
+
+                    if is_delayed:
+                        delayed[route] = delay_sec
             except:
                 pass
             return delayed
@@ -86,18 +94,20 @@ def get_mta():
                 except:
                     pass
 
-        # 180초(3분) 이상 delay만 표시
         alerts = []
         for route, delay_sec in sorted(results.items()):
-            if delay_sec >= 180:
+            if delay_sec >= 60:
                 mins = delay_sec // 60
                 alerts.append(f"{route} train  ~{mins} min delay")
+            else:
+                alerts.append(f"{route} train  delayed")
 
         if not alerts:
             return {"good": True, "lines": [], "unavailable": False}
         return {"good": False, "lines": alerts[:4], "unavailable": False}
 
     except Exception as e:
+        return {"good": False, "lines": [], "unavailable": True}
         return {"good": False, "lines": [], "unavailable": True}
 
 def create_image(weather, mta):
@@ -379,25 +389,39 @@ def test_mta():
     try:
         from nyct_gtfs import NYCTFeed
         results = {}
-        for line in ["4", "A", "N", "L"]:
+        for line in ["4", "A", "N", "L", "B", "G", "J"]:
             try:
                 feed = NYCTFeed(line)
                 delayed_trips = []
                 for t in feed.trips:
-                    if t.has_delay_alert:
-                        delay_sec = 0
-                        try:
-                            for stu in t._trip_update.stop_time_update:
-                                if stu.HasField("arrival") and stu.arrival.delay > 0:
-                                    delay_sec = stu.arrival.delay
-                                    break
-                                if stu.HasField("departure") and stu.departure.delay > 0:
-                                    delay_sec = stu.departure.delay
-                                    break
-                        except:
-                            pass
-                        delayed_trips.append({"route": t.route_id, "delay_sec": delay_sec})
-                results[line] = {"total": len(feed.trips), "delayed": delayed_trips[:5]}
+                    delay_sec = 0
+                    has_alert = t.has_delay_alert
+                    try:
+                        for stu in t._trip_update.stop_time_update:
+                            d = 0
+                            if stu.HasField("arrival") and stu.arrival.delay > 0:
+                                d = stu.arrival.delay
+                            if stu.HasField("departure") and stu.departure.delay > d:
+                                d = stu.departure.delay
+                            if d >= 60:
+                                delay_sec = d
+                                break
+                    except:
+                        pass
+                    if has_alert or delay_sec >= 60:
+                        delayed_trips.append({
+                            "route": t.route_id,
+                            "has_alert": has_alert,
+                            "delay_sec": delay_sec
+                        })
+                # dedupe by route
+                seen = set()
+                deduped = []
+                for d in delayed_trips:
+                    if d["route"] not in seen:
+                        seen.add(d["route"])
+                        deduped.append(d)
+                results[line] = {"total": len(feed.trips), "delayed": deduped[:5]}
             except Exception as e:
                 results[line] = {"error": str(e)}
         return jsonify({"ok": True, "results": results})
