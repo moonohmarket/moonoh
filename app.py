@@ -843,3 +843,174 @@ No fees. List in seconds.
     except Exception as e:
         import traceback
         return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()})
+
+# ─────────────────────────────────────────────
+# MOONOH LISTING FETCHER
+# ─────────────────────────────────────────────
+def get_moonoh_listings(count=1):
+    """Admin 페이지에서 매물 데이터 스크래핑"""
+    import re, json, random
+    try:
+        session = requests.Session()
+        # 로그인
+        session.post(
+            "http://52.44.113.58:8080/login.jsp",
+            data={"adminId": "admin", "adminPw": "1234"},
+            timeout=10
+        )
+        # 상품 목록 페이지
+        r = session.get("http://52.44.113.58:8080/admin.jsp", timeout=10)
+        # JavaScript array에서 JSON 추출
+        m = re.search(r'var array = (\[.*?\]);', r.text, re.DOTALL)
+        if not m:
+            return []
+        items = json.loads(m.group(1))
+        # isSold != Y, isShow == Y 필터
+        active = [i for i in items if i.get('isShow') == 'Y' and i.get('isSold') != 'Y']
+        if not active:
+            active = items
+        # 랜덤 선택
+        selected = random.sample(active, min(count, len(active)))
+        result = []
+        for item in selected:
+            # 이미지 URL 변환: temp/xxx/IMG.HEIC → temp/xxx/thumbnail_IMG.jpg
+            pic = item.get('pictureUrl', '')
+            if pic:
+                parts = pic.rsplit('/', 1)
+                if len(parts) == 2:
+                    thumb_url = f"http://52.44.113.58:8080/file/{parts[0]}/thumbnail_{parts[1].replace('.HEIC', '.jpg').replace('.heic', '.jpg')}"
+                else:
+                    thumb_url = f"http://52.44.113.58:8080/file/{pic}"
+            else:
+                thumb_url = None
+            result.append({
+                'no': item.get('no'),
+                'title': item.get('title', ''),
+                'category': item.get('categoryName', ''),
+                'price': item.get('price', 0),
+                'location': item.get('townNo', ''),
+                'image_url': thumb_url,
+                'seller': item.get('userName', ''),
+                'date': item.get('insertTime', ''),
+            })
+        return result
+    except Exception as e:
+        return []
+
+TOWN_MAP = {1: 'Downtown Manhattan', 2: 'Midtown Manhattan', 3: 'Upper East Side',
+            4: 'Upper West Side', 5: 'Upper Manhattan'}
+
+def slide_listing(item):
+    """매물 하나를 소개하는 이미지 슬라이드"""
+    def draw(img, d, f, c, PAD, W, H):
+        # 상단 파란 헤더
+        img.paste((58, 70, 226), (0, 0, W, 160))
+        d.text((PAD, 80), 'moonoh', fill=c['white'], font=f['logo'], anchor='lm')
+        d.text((W - PAD, 80), "Today's Pick 🏙️", fill='#AAAAFF', font=f['sub'], anchor='rm')
+
+        # 매물 이미지 (있으면)
+        img_area_y = 160
+        img_area_h = 460
+        try:
+            if item.get('image_url'):
+                r = requests.get(item['image_url'], timeout=8)
+                if r.status_code == 200:
+                    from io import BytesIO
+                    listing_img = Image.open(BytesIO(r.content)).convert('RGB')
+                    # 크롭해서 맞추기
+                    iw, ih = listing_img.size
+                    scale = max(W / iw, img_area_h / ih)
+                    new_w, new_h = int(iw * scale), int(ih * scale)
+                    listing_img = listing_img.resize((new_w, new_h), Image.LANCZOS)
+                    # 중앙 크롭
+                    x0 = (new_w - W) // 2
+                    y0 = (new_h - img_area_h) // 2
+                    listing_img = listing_img.crop((x0, y0, x0 + W, y0 + img_area_h))
+                    img.paste(listing_img, (0, img_area_y))
+                    # 그라데이션 오버레이 (하단)
+                    for i in range(120):
+                        alpha = int(255 * (i / 120) ** 1.5)
+                        d.rectangle([0, img_area_y + img_area_h - 120 + i,
+                                     W, img_area_y + img_area_h - 119 + i],
+                                    fill=(255, 255, 255, alpha))
+        except:
+            # 이미지 없으면 회색 배경
+            d.rectangle([0, img_area_y, W, img_area_y + img_area_h], fill=c['lgray'])
+            d.text((W // 2, img_area_y + img_area_h // 2), '📦', fill=c['gray'], font=f['big'], anchor='mm')
+
+        # 매물 정보
+        info_y = img_area_y + img_area_h + 10
+        # 카테고리 badge
+        cat = item.get('category', '')
+        cat_bb = d.textbbox((0, 0), cat, font=f['tag'])
+        cat_w = cat_bb[2] - cat_bb[0] + 24
+        d.rectangle([PAD, info_y, PAD + cat_w, info_y + 44], fill=c['accent'])
+        d.text((PAD + 12, info_y + 22), cat, fill=c['white'], font=f['tag'], anchor='lm')
+
+        # 제목
+        title = item.get('title', '')
+        info_y += 58
+        d.text((PAD, info_y), title[:40], fill=c['black'], font=f['label'])
+        if len(title) > 40:
+            info_y += 44
+            d.text((PAD, info_y), title[40:76], fill=c['black'], font=f['label'])
+        info_y += 48
+
+        # 가격 + 위치
+        price = item.get('price', 0)
+        price_text = 'Free' if price == 0 else f'${price}'
+        location = TOWN_MAP.get(item.get('location'), 'NYC')
+        d.text((PAD, info_y), price_text, fill=c['accent'], font=f['title'])
+        d.text((W - PAD, info_y), f'📍 {location}', fill=c['gray'], font=f['sub'], anchor='rm')
+
+        draw_footer(d, f, c, PAD, W, H)
+    return make_slide(draw)
+
+
+@app.route('/generate_listing')
+def generate_listing():
+    """moonoh 매물 1개 소개 이미지 생성"""
+    try:
+        items = get_moonoh_listings(count=1)
+        if not items:
+            return jsonify({'ok': False, 'error': 'No listings found'})
+
+        item = items[0]
+        slide = slide_listing(item)
+
+        now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5)))
+        ts = now.strftime('%Y-%m-%d-%H%M%S')
+        buf = io.BytesIO()
+        slide.save(buf, format='JPEG', quality=92)
+        buf.seek(0)
+        result = cloudinary.uploader.upload(
+            buf,
+            public_id=f'moonoh_listing_{ts}',
+            overwrite=True
+        )
+        image_url = result['secure_url']
+
+        price_text = 'Free' if item['price'] == 0 else f"${item['price']}"
+        location = TOWN_MAP.get(item.get('location'), 'NYC')
+        caption = f"""🏙️ Today's Pick on moonoh
+
+{item['title']}
+{price_text} · {item['category']} · {location}
+
+Find it (and more) on moonoh — NYC's local marketplace.
+No fees. List in seconds.
+
+📲 moon-oh.com
+
+#NYC #NewYork #NYCLife #moonoh #secondhand #thrift #NYCMarketplace #{item['category'].replace(' ', '').replace('&', '').replace(',', '')}"""
+
+        return jsonify({
+            'ok': True,
+            'image_url': image_url,
+            'caption': caption,
+            'item': item,
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()})
