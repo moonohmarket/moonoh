@@ -1014,3 +1014,15 @@ No fees. List in seconds.
     except Exception as e:
         import traceback
         return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()})
+
+@app.route("/test_admin")
+def test_admin():
+    try:
+        r = requests.get("http://52.44.113.58:8080/adminContent.jsp?page=product&subPage=product", timeout=15)
+        return jsonify({
+            "status": r.status_code,
+            "has_array": "var array" in r.text,
+            "preview": r.text[:500]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)})
