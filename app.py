@@ -852,14 +852,14 @@ def get_moonoh_listings(count=1):
     import re, json, random
     try:
         session = requests.Session()
-        # 로그인
-        session.post(
-            "http://52.44.113.58:8080/login.jsp",
-            data={"adminId": "admin", "adminPw": "1234"},
-            timeout=10
+        # 로그인 없이 직접 접근 (세션 불필요)
+        r = session.get(
+            "http://52.44.113.58:8080/adminContent.jsp?page=product&subPage=product",
+            timeout=15
         )
-        # 상품 목록 페이지
-        r = session.get("http://52.44.113.58:8080/admin.jsp", timeout=10)
+        if r.status_code != 200 or 'var array' not in r.text:
+            # fallback: admin.jsp 시도
+            r = session.get("http://52.44.113.58:8080/admin.jsp", timeout=15)
         # JavaScript array에서 JSON 추출
         m = re.search(r'var array = (\[.*?\]);', r.text, re.DOTALL)
         if not m:
